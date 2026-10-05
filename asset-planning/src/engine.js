@@ -496,14 +496,19 @@ const Engine = (function () {
     return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
   }
 
-  /* Ordem dos retornos: o MESMO conjunto de retornos anuais na aposentadoria, com os piores primeiro ou os melhores primeiro. */
+  /* Ordem dos retornos: o MESMO conjunto de retornos anuais na aposentadoria. Só mudam de lugar os k melhores e os k piores anos
+     (k = 5): ou os piores vêm primeiro e os melhores por último, ou o contrário; os demais anos ficam na mesma ordem nas duas versões. */
   function sequenceDemo(m, opts) {
     opts = opts || {};
     const vol = Math.max(0, opts.vol == null ? 10 : opts.vol) / 100, X = opts.X || 0;
     const P = prep(m, 0, {}), D = m.cashflow.desiredWithdrawal, nRet = Math.max(1, Math.round(m.profile.horizonAge - m.profile.retireAge));
     const zs = []; for (let i = 0; i < nRet; i++) zs.push(invNorm((i + 0.5) / nRet));
     const mu = zs.reduce(function (t, x) { return t + x; }, 0) / nRet, sd = Math.sqrt(zs.reduce(function (t, x) { return t + (x - mu) * (x - mu); }, 0) / nRet) || 1;
-    const zn = zs.map(function (x) { return (x - mu) / sd; });
+    const zn = zs.map(function (x) { return (x - mu) / sd; });                     // ascendente, média 0, desvio 1
+    const k = Math.max(1, Math.min(5, Math.floor(nRet / 4)));
+    const worst = zn.slice(0, k), best = zn.slice(nRet - k).reverse(), mid = zn.slice(k, nRet - k), mix = [];
+    for (let i = 0, j = mid.length - 1; i <= j;) { mix.push(mid[i++]); if (i <= j) mix.push(mid[j--]); }
+    const badStart = worst.concat(mix, best.slice().reverse()), goodStart = best.concat(mix, worst.slice().reverse());
     const run = function (order) {
       const rM = Float64Array.from(P.rM);
       for (let t = P.n1; t < P.N; t++) {
@@ -515,8 +520,8 @@ const Engine = (function () {
     };
     const flat = sim(P, { X: X, S: D, path: true });
     return {
-      bad: run(zn), good: run(zn.slice().reverse()), flat: { term: flat.term, yearly: flat.yearly, exhaust: exhaustAge(flat.yearly) },
-      years: nRet, vol: vol * 100, worst: Math.max(-0.9, P.rrPost + vol * zn[0]), best: P.rrPost + vol * zn[nRet - 1]
+      bad: run(badStart), good: run(goodStart), flat: { term: flat.term, yearly: flat.yearly, exhaust: exhaustAge(flat.yearly) },
+      orders: { bad: badStart, good: goodStart }, years: nRet, window: k, vol: vol * 100, worst: Math.max(-0.9, P.rrPost + vol * zn[0]), best: P.rrPost + vol * zn[nRet - 1]
     };
   }
 

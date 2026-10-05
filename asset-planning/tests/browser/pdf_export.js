@@ -6,7 +6,7 @@ const fs = require('fs');
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   const saved = [];
-  await page.exposeFunction('__saveFile', (name, b64) => { saved.push(name); fs.writeFileSync(require('path').join(process.env.OUT_DIR || '/tmp', require('path').join(process.env.OUT_DIR || '/tmp', 'out_' + name)), Buffer.from(b64, 'base64')); });
+  await page.exposeFunction('__saveFile', (name, b64) => { saved.push(name); fs.writeFileSync(require('path').join(process.env.OUT_DIR || '/tmp', 'out_' + name), Buffer.from(b64, 'base64')); });
   await page.addInitScript(() => { window.claude = { use: async (n) => n === 'downloads' ? { save: async ({ filename, data }) => { const blob = data instanceof Blob ? data : new Blob([data]); const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 8192) s += String.fromCharCode.apply(null, buf.subarray(i, i + 8192)); await window.__saveFile(filename, btoa(s)); return { status: 'saved' }; } } : null }; });
   await page.goto('file://' + require('path').join(__dirname, '..', '..', 'dist', 'asset-planning.local.html')); await page.waitForTimeout(900);
   const tab = async (t) => { await page.click('.tab[data-tab="' + t + '"]'); await page.waitForTimeout(450); };
@@ -15,7 +15,7 @@ const fs = require('fs');
   await tab('apos'); await page.evaluate(() => document.getElementById('btnReset').closest('details').open = true);
   await page.fill('[data-path="cashflow.executed"]', '9.000,00'); await page.click('#addPhaseEx'); await page.click('#addPhaseEx'); await page.click('#fillTax'); await page.click('#fillTax'); await page.check('[data-path="retTax.on"]');
   await tab('obj'); await page.fill('#goalRows tbody tr:first-child [data-field="saved"]', '30.000,00');
-  for (const [t, id] of [['obj', 'btnPdfObj'], ['cx', 'btnPdfCx'], ['prot', 'btnPdfProt'], ['ver', 'btnPdfVer'], ['apos', 'btnPdfApos']]) {
+  for (const [t, id] of [['succ', 'btnPdfSucc'], ['apos', 'btnPdfApos'], ['obj', 'btnPdfObj'], ['ver', 'btnPdfVer']]) {
     await tab(t); await page.click('#' + id);
     await page.waitForFunction((i) => !document.getElementById(i).disabled, id, { timeout: 120000 });
     await page.waitForTimeout(400);

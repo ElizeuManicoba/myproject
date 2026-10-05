@@ -45,9 +45,10 @@ ok("choque de 30% ao aposentar rebaixa a faixa central depois da aposentadoria",
 
 // ---- ordem dos retornos
 const q = E.sequenceDemo(s, { vol: 15 });
-ok("ordem dos retornos: piores primeiro termina abaixo de melhores primeiro (mesmo conjunto de retornos)", q.bad.term < q.good.term, Math.round(q.bad.term) + " < " + Math.round(q.good.term));
-ok("piores primeiro esgota antes (ou só ele esgota)", q.bad.exhaust !== null && (q.good.exhaust === null || q.bad.exhaust < q.good.exhaust), q.bad.exhaust + " vs " + q.good.exhaust);
-ok("35 anos de aposentadoria; pior ano muito negativo e melhor ano muito positivo", q.years === 35 && q.worst < -0.1 && q.best > 0.3, q.worst.toFixed(3) + " / " + q.best.toFixed(3));
+ok("ordem dos retornos: piores 5 anos no início termina abaixo de melhores 5 anos no início (mesmo conjunto de retornos)", q.bad.term < q.good.term, Math.round(q.bad.term) + " < " + Math.round(q.good.term));
+ok("com os piores anos no início a reserva esgota antes (ou só ela esgota)", q.bad.exhaust !== null && (q.good.exhaust === null || q.bad.exhaust < q.good.exhaust), q.bad.exhaust + " vs " + q.good.exhaust);
+ok("35 anos de aposentadoria, janela de 5 anos; pior ano muito negativo e melhor ano muito positivo", q.years === 35 && q.window === 5 && q.worst < -0.1 && q.best > 0.2, q.worst.toFixed(3) + " / " + q.best.toFixed(3));
+ok("as duas ordens são permutações do mesmo conjunto (mesma média e mesmo desvio) e diferem só nos 5+5 anos extremos", (() => { const r = E.sequenceDemo(s, { vol: 15 }), a = r.orders.bad.slice().sort((x, y) => x - y), b = r.orders.good.slice().sort((x, y) => x - y); const mean = (v) => v.reduce((t, x) => t + x, 0) / v.length; const sd = (v) => Math.sqrt(v.reduce((t, x) => t + (x - mean(v)) ** 2, 0) / v.length); const diff = r.orders.bad.map((x, i) => (x === r.orders.good[i] ? 0 : 1)).reduce((t, x) => t + x, 0); return a.every((x, i) => x === b[i]) && near(mean(a), 0, 1e-9) && near(sd(a), 1, 1e-9) && diff === 10 && r.orders.bad.slice(0, 5).every((x) => x < -1.1) && r.orders.good.slice(0, 5).every((x) => x > 1.1); })());
 const q0 = E.sequenceDemo(s, { vol: 0 });
 ok("vol = 0: as duas ordens coincidem com o determinístico", near(q0.bad.term, q0.flat.term, 1e-6) && near(q0.good.term, q0.flat.term, 1e-6));
 

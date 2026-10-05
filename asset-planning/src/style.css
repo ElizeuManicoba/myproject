@@ -624,3 +624,5 @@
 
   .pdf-mode .keep{ padding-top:18px; }  /* folga contra a deriva de alguns pixels na quebra de página */
   @media (max-width:760px){ .frow .fi{ width:100% !important; max-width:100%; } }
+
+  .tab{ padding:0 11px; }

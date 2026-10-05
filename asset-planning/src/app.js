@@ -455,8 +455,8 @@
     const bs = Planning.balanco(state), fl = Planning.fluxo(state, bs), rs = Planning.reserva(state, fl, bs);
     const v = Engine.validate(state), an = v.errors.length ? null : Engine.analyze(state, 0);
     const ind = Planning.indicadores(state, bs, fl, rs, an), q = Planning.quality(state);
-    const gl = Goals.analyze(state, fl, bs, new Date(), an), pr = Protection.analyze(state, { fl, bs, goals: gl }), tauEst = state.taxRows.length ? taxOf().tau : null;
-    const sug = Planning.suggestions(state, { an, bs, fl, rs, ind, quality: q, goals: gl, protection: pr, tauEst, stress: an ? { crise: Engine.stress(state, state.stress.crise) } : {} }).filter((s) => !state.actions.some((a) => a.source === s.key));
+    const gl = Goals.analyze(state, fl, bs, new Date(), an), pr = Protection.analyze(state, { fl, bs, goals: gl }), tauEst = state.taxRows.length ? taxOf().tau : null, sc = Succession.analyze(state, { bs });
+    const sug = Planning.suggestions(state, { an, bs, fl, rs, ind, quality: q, goals: gl, protection: pr, succession: sc, tauEst, stress: an ? { crise: Engine.stress(state, state.stress.crise) } : {} }).filter((s) => !state.actions.some((a) => a.source === s.key));
     $("suggestBox").innerHTML = sug.length ? '<div class="sug-box">' + sug.map((s) => '<div class="sug"><div><div class="st">' + esc(s.title) + ' <span class="badge ' + PRIO_BADGE[s.priority] + '">' + label(L_PRIORITY, s.priority) + '</span></div><div class="se">' + esc(s.evidence) + '</div><div class="sn">Próximo passo: ' + esc(s.next) + '</div></div><button class="btn ghost" type="button" data-sug="' + s.key + '">Adicionar ao plano</button></div>').join("") + "</div>" : '<div class="empty-note">Nenhuma sugestão pendente: os indicadores atuais não apontam novas ações, ou as sugestões já foram adicionadas.</div>';
     $("suggestBox").querySelectorAll("[data-sug]").forEach((btn) => btn.addEventListener("click", () => {
       const s = sug.find((x) => x.key === btn.dataset.sug); if (!s) return;
@@ -471,7 +471,7 @@
   });
 
   /* ================= gráficos (Chart.js) ================= */
-  const charts = { donut: null, main: null, ira: null, pgbl: null, goals: null, debt: null, phase: null };
+  const charts = { donut: null, main: null, ira: null, pgbl: null, goals: null, debt: null, phase: null, mc: null, seq: null };
   function mount(name, canvasId, cfg) {
     if (charts[name]) charts[name].destroy();
     charts[name] = new Chart($(canvasId).getContext("2d"), cfg);
@@ -650,10 +650,12 @@
   }
 
   function clearApos() {
-    ["strategyCards", "miniBarSection", "sensSection", "stressSection", "ledgerNote", "reserveSpark", "phaseResult", "taxResult"].forEach((id) => { $(id).innerHTML = ""; });
+    ["strategyCards", "miniBarSection", "sensSection", "stressSection", "ledgerNote", "reserveSpark", "phaseResult", "taxResult", "mcResult"].forEach((id) => { $(id).innerHTML = ""; });
     $("ledgerTable").innerHTML = "";
     if (charts.main) { charts.main.destroy(); charts.main = null; }
     if (charts.phase) { charts.phase.destroy(); charts.phase = null; }
+    if (charts.mc) { charts.mc.destroy(); charts.mc = null; }
+    if (charts.seq) { charts.seq.destroy(); charts.seq = null; }
   }
 
   function renderApos() {
@@ -686,7 +688,7 @@
       strategyCardHTML("Consumir a Reserva", iconConsume, "Gasta o patrimônio financeiro até " + p.horizonAge + " anos" + (c.minLegacy > 0 ? ", deixando " + money(c.minLegacy) : ""), an.consume, an) +
       strategyCardHTML("Preservar a Reserva", iconPreserve, "Vive do retorno real; o valor real da reserva é mantido", an.preserve, an);
     renderMiniBars(an);
-    renderSensitivity(); renderStress(); renderPhases(); renderTax();
+    renderSensitivity(); renderStress(); renderPhases(); renderTax(); renderMc(an);
     const pa = Engine.paths(state, an);
     $("reserveSpark").innerHTML = sparklineSVG(pa.current.slice(0, p.retireAge - p.currentAge + 1).map((pt) => pt.bal), cssVar("--series-1"));
     renderMainChart(an);
@@ -1106,11 +1108,138 @@
         '<div class="ledger-note">Tabela regressiva (PGBL e VGBL): ' + REG_ROWS.map((r) => r[0] + " " + Math.round(r[1] * 100) + "%").join(" · ") + ". Dedução do IR no cálculo: aplicado ao saque líquido da carteira (a renda de INSS e semelhantes não entra). Estimativa, sem o ajuste anual e sem o IR dos rendimentos durante a acumulação.</div></div>" : "");
   }
 
+  /* ================= ABA · SUCESSÃO ================= */
+  function renderSucc() {
+    const bs = Planning.balanco(state), r = Succession.analyze(state, { bs }), c = state.succ;
+    const s1 = cssVar("--series-1"), s2 = cssVar("--series-2"), s3 = cssVar("--series-3"), grey = cssVar("--grey-line");
+    $("succCommonRow").style.display = c.regime === "comunhao_parcial" && c.spouse ? "" : "none";
+    $("succPensionHint").textContent = "Em branco: soma os ativos cujo nome indica PGBL, VGBL ou previdência (hoje " + money(r.pensionAuto) + ").";
+    const chip = (t, v, cls) => '<span class="sum-chip"><span>' + t + "</span><b" + (cls ? ' class="' + cls + '"' : "") + ">" + v + "</b></span>";
+    $("succSticky").innerHTML = chip("Custo estimado", money(r.total)) + chip("Liquidez fora do inventário", money(r.liquidOutside)) + chip(r.gap > 0 ? "Lacuna de caixa" : "Folga", money(r.gap > 0 ? r.gap : r.liquidOutside - r.total), r.gap > 0 ? "neg" : "pos");
+    $("succKpis").innerHTML =
+      tileHTML("Monte-mor líquido", money(r.monte), "ativos − previdência − dívidas") +
+      tileHTML("Custo estimado", money(r.total), r.totalPct == null ? "—" : pct1(r.totalPct) + " do monte-mor") +
+      tileHTML("Liquidez fora do inventário", money(r.liquidOutside), "previdência " + money(r.pension) + " + cobertura de morte " + money(r.life)) +
+      (r.gap > 0 ? tileHTML("Lacuna de caixa", money(r.gap), "custo − liquidez fora do inventário", "neg") : tileHTML("Folga de caixa", money(r.liquidOutside - r.total), "a liquidez fora do inventário cobre o custo"));
+
+    $("succFlow").innerHTML = '<div class="result-card"><h3>Da herança à base do imposto</h3>' +
+      irRow("Ativos totais <small>(Diagnóstico)</small>", money(r.assets)) +
+      irRow("(−) Previdência privada <small>(paga aos beneficiários, fora do inventário)</small>", "−" + money(r.pension)) +
+      irRow("(−) Dívidas", "−" + money(r.debts)) +
+      irRow("<b>Monte-mor líquido</b>", "<b>" + money(r.monte) + "</b>") +
+      (r.community ? irRow("(−) Meação do cônjuge <small>(" + Succession.REGIME_LABEL[c.regime].toLowerCase() + (c.regime === "comunhao_parcial" ? ", " + pct1(c.commonPct) + " em comum" : "") + ")</small>", "−" + money(r.meacao)) : irRow("Meação do cônjuge <small>(" + (c.spouse ? Succession.REGIME_LABEL[c.regime].toLowerCase() : "sem cônjuge") + ")</small>", money(0))) +
+      irRow("Base de cálculo do ITCMD", money(r.base), "total") +
+      (c.heirs > 0 ? '<div class="ind-meta" style="margin-top:8px">Com herdeiros necessários, ' + money(r.legitima) + " (50% do monte-mor) é a parte indisponível, a legítima. " + c.heirs + (c.heirs === 1 ? " herdeiro informado." : " herdeiros informados.") + "</div>" : "") + "</div>";
+
+    $("succCosts").innerHTML = '<div class="two-col"><div class="panel"><h3>Custos estimados do inventário</h3>' +
+      stackBar([{ label: "ITCMD", value: r.itcmd, color: s1 }, { label: "Honorários", value: r.fees, color: s2 }, { label: "Custas", value: r.costs, color: s3 }, { label: "Manutenção dos bens", value: r.carry, color: grey }]) +
+      '<div style="margin-top:10px">' + r.parts.map((p) => irRow(esc(p.label) + (p.key === "itcmd" ? " <small>(" + pct1(c.itcmd) + " sobre a base)</small>" : p.key === "fees" ? " <small>(" + pct1(c.fees) + " do monte)</small>" : p.key === "costs" ? " <small>(" + pct1(c.costs) + " do monte)</small>" : " <small>(" + money(c.carry) + " × " + c.months + " meses)</small>"), money(p.value))).join("") + irRow("Total", money(r.total), "total bad") + "</div></div>" +
+      '<div class="panel"><h3>Caixa para pagar</h3>' +
+      irRow("Previdência privada <small>(fora do inventário)</small>", money(r.pension)) + irRow("Cobertura de morte já contratada <small>(aba Proteção)</small>", money(r.life)) + irRow("Liquidez fora do inventário", money(r.liquidOutside)) + irRow("Custo estimado", money(r.total)) +
+      (r.gap > 0 ? irRow("Lacuna de caixa imediato", money(r.gap), "total bad") : irRow("Folga de caixa", money(r.liquidOutside - r.total), "total good")) +
+      '<div class="ind-meta" style="margin-top:10px">Contas e investimentos no nome de quem falece (' + money(r.liquidInside) + " em liquidez imediata ou curta) em geral ficam bloqueados até a autorização do inventário" + (r.gap > 0 ? (r.gapAfterRelease > 0 ? ", e mesmo depois dela não cobririam toda a lacuna" : ": depois dela cobririam a lacuna, mas a família passaria o período sem esse caixa") : "") + ". Bens ilíquidos (imóveis, participações) são " + pct1(r.illiquidShare) + " do patrimônio no inventário: se a liquidez faltar, a alternativa passa a ser vender bens sob pressão de prazo.</div></div></div>";
+
+    const sens = Succession.sensitivity(state, { bs });
+    $("succSens").innerHTML = '<div class="sens-wrap" style="margin-top:0"><p class="lead">A alíquota do ITCMD é fixada pelo estado e pode ser progressiva. Veja quanto o custo e a lacuna mudam dentro da faixa usual; as demais premissas ficam como estão.</p><div class="table-scroll"><table class="sens"><thead><tr><th class="l">ITCMD</th><th>Custo total</th><th>% do monte-mor</th><th>Lacuna de caixa</th></tr></thead><tbody>' +
+      sens.map((x) => '<tr class="' + (Math.abs(x.itcmd - c.itcmd) < 1e-9 ? "hl" : "") + '"><td class="l">' + x.itcmd + "%" + (Math.abs(x.itcmd - c.itcmd) < 1e-9 ? " (premissa atual)" : "") + "</td><td>" + money(x.total) + "</td><td>" + (x.totalPct == null ? "—" : pct1(x.totalPct)) + "</td><td>" + (x.gap > 0 ? '<span class="neg">' + money(x.gap) + "</span>" : "sem lacuna") + "</td></tr>").join("") + "</tbody></table></div></div>";
+
+    $("succNotes").innerHTML = '<div class="note-box"><b>Premissas usadas.</b><ul>' +
+      "<li>" + (c.spouse ? "Há cônjuge sobrevivente; regime: " + Succession.REGIME_LABEL[c.regime].toLowerCase() + (c.regime === "comunhao_parcial" ? " (" + pct1(c.commonPct) + " do patrimônio em comum)" : "") + "." : "Sem cônjuge sobrevivente: não há meação.") + "</li>" +
+      "<li>ITCMD de " + pct1(c.itcmd) + " sobre a base (sem a meação); honorários de " + pct1(c.fees) + " e custas de " + pct1(c.costs) + " sobre o monte-mor; inventário de " + c.months + " meses, com " + money(c.carry) + "/mês para manter os bens.</li>" +
+      "<li>Previdência privada e cobertura de morte tratadas como pagas a beneficiários, fora do inventário e sem ITCMD.</li></ul>" +
+      "<b>Limites.</b><ul>" +
+      "<li>Estimativa de ordem de grandeza, não cálculo de inventário. O tratamento de previdência e de capital segurado pelo ITCMD, o regime de bens e as tabelas de honorários variam por estado, comarca e decisão judicial.</li>" +
+      "<li>Não considera imposto de renda sobre ganho de capital em bens transmitidos, dívidas ocultas, partilha de empresas, bens no exterior nem planejamento prévio (doação, testamento, estruturas societárias): são matéria jurídica e tributária específica, com advogado e contador.</li>" +
+      "<li>Planejamento sucessório não é recomendação de produto. Este material não indica instrumentos nem valores mobiliários.</li></ul></div>";
+  }
+  const succPreset = (k) => () => { Object.assign(state.succ, { fees: Succession.PRESETS[k].fees, costs: Succession.PRESETS[k].costs, months: Succession.PRESETS[k].months }); fillAll(); renderAll(); scheduleSave(); $("succToast").textContent = "Aplicado: " + Succession.PRESETS[k].label + ". São pontos de partida; confirme com o advogado."; };
+
+  /* ================= APOSENTADORIA · cenários simulados (Monte Carlo) ================= */
+  const MC_VOLS = [6, 10, 14, 18];
+  let mcCache = { key: "", val: null };
+  function mcCompute(an) {
+    const m = state.mc, X = m.scenario === "consumir" && isFinite(an.consume.X) ? an.consume.X : 0;
+    const key = JSON.stringify([state.profile, state.assets.liquid, state.rates, state.cashflow, state.extraMonthly, state.extraAnnual, state.retIncome, state.phases, state.phaseRows, state.retTax, state.taxRows, state.irpf.vig, m, X]);
+    if (mcCache.key === key) return mcCache.val;
+    const base = Engine.monteCarlo(state, { sims: m.sims, vol: m.vol, dist: m.dist, seed: m.seed, X: X });
+    const sens = MC_VOLS.map((v) => Engine.monteCarlo(state, { sims: Math.min(m.sims, 1000), vol: v, dist: m.dist, seed: m.seed, X: X }));
+    const seq = Engine.sequenceDemo(state, { vol: m.vol, X: X });
+    const val = { X: X, base: base, sens: sens, seq: seq };
+    mcCache = { key: key, val: val };
+    return val;
+  }
+  const rangeCompact = (a, b) => (a >= 1e6 && b >= 1e6 ? "R$ " + (a / 1e6).toFixed(1).replace(".", ",") + " a " + (b / 1e6).toFixed(1).replace(".", ",") + " mi" : moneyCompact(Math.max(0, a)) + " a " + moneyCompact(b));
+  const floor0 = (arr) => arr.map((v) => Math.max(0, Math.round(v)));
+  const balTxt = (v) => (v <= 0.5 ? "Esgotada" : money(v));
+  const exTxt = (age, h) => (age == null ? "não esgota até " + h : "aos " + age + " anos");
+  function renderMc(an) {
+    const m = state.mc, R = mcCompute(an), B = R.base, p = state.profile, ri = p.retireAge - p.currentAge, last = B.ages.length - 1;
+    const rt = Engine.ratesOf(state), distTxt = m.dist === "tstudent" ? "caudas pesadas (t de Student, 4 g.l., mesma volatilidade)" : "normal";
+    const s1 = cssVar("--series-1"), s1w = cssVar("--series-1-wash"), grey = cssVar("--grey-line"), ink = cssVar("--ink-secondary"), s2 = cssVar("--series-2"), s3 = cssVar("--series-3");
+    const ageIdx = [ri, ri + 10, ri + 20, last].filter((v, i, a) => v <= last && a.indexOf(v) === i);
+    const band = (k, i) => B.bands[k][i];
+    $("mcResult").innerHTML =
+      '<div class="banner warn"><b>Isto não é probabilidade de sucesso nem previsão.</b> É a faixa de resultados que as premissas abaixo produzem. Com outra volatilidade, outra distribuição ou outro plano, a faixa muda, e ninguém conhece essas premissas com precisão. Use a faixa para conversar sobre margem de segurança e regras de ajuste de gasto, não para prometer um resultado.</div>' +
+      (m.vol === 0 ? '<div class="banner info">Com volatilidade zero todos os cenários coincidem com o caminho determinístico.</div>' : "") +
+      '<div class="note-box" style="margin-bottom:14px"><b>Premissas desta simulação.</b><ul>' +
+      "<li>" + fmtD(B.sims, 0) + " cenários; retornos reais mensais independentes, média igual à das premissas (" + pct2(rt.rrAcc * 100) + " a.a. na acumulação, " + pct2(rt.rrPost * 100) + " a.a. na aposentadoria) e volatilidade de " + pct1(m.vol) + " a.a.; distribuição " + distTxt + ". Semente " + m.seed + " (mesma semente, mesmo resultado).</li>" +
+      "<li>Plano: " + (m.scenario === "consumir" && R.X > 0 ? "aporte realizado + " + money(R.X) + "/mês adicionais (consumir a reserva)" : "aporte realizado de " + money(state.cashflow.executed) + "/mês") + "; gasto desejado de " + money(state.cashflow.desiredWithdrawal) + "/mês a partir dos " + p.retireAge + " anos, horizonte de " + p.horizonAge + " anos" + (state.phases.on ? ", com gasto por fases" : "") + (an.P.tau > 0 ? ", com IR de " + pct1(an.P.tau * 100) + " sobre os saques" : "") + ". Valores em R$ de hoje; inflação não oscila.</li>" +
+      "<li>Não modelam: inflação variável, correlação entre retornos de anos diferentes, mudança de comportamento de gasto, longevidade incerta nem custos de transação.</li></ul></div>" +
+      '<div class="kpi-row" style="margin-bottom:14px">' +
+      tileHTML("Saldo na aposentadoria", balTxt(band("p50", ri)), "mediana; determinístico " + balTxt(B.det[ri])) +
+      tileHTML("Faixa na aposentadoria", rangeCompact(band("p10", ri), band("p90", ri)), "do percentil 10 ao 90") +
+      tileHTML("Saldo aos " + p.horizonAge + " anos", balTxt(band("p50", last)), "mediana; determinístico " + balTxt(B.det[last])) +
+      tileHTML("Caminho desfavorável", exTxt(B.exhaust.p10, p.horizonAge), "percentil 10: a reserva dura até") + "</div>" +
+      '<div class="chart-box"><h3>Faixa de saldos da reserva financeira</h3><div class="sub">R$ de hoje. A faixa escura vai do percentil 25 ao 75; a clara, do 10 ao 90. Saldos negativos aparecem como zero (reserva esgotada).</div><div class="cv" style="height:330px"><canvas id="chartMc"></canvas></div></div>' +
+      '<div class="sens-wrap" style="margin-top:0"><h4>Faixas por idade</h4><div class="table-scroll"><table class="sens"><thead><tr><th class="l">Idade</th><th>Percentil 10</th><th>Percentil 25</th><th>Mediana</th><th>Percentil 75</th><th>Percentil 90</th><th>Determinístico</th></tr></thead><tbody>' +
+      ageIdx.map((i) => '<tr><td class="l">' + B.ages[i] + (i === ri ? " (aposentadoria)" : i === last ? " (horizonte)" : "") + "</td><td>" + balTxt(band("p10", i)) + "</td><td>" + balTxt(band("p25", i)) + "</td><td>" + balTxt(band("p50", i)) + "</td><td>" + balTxt(band("p75", i)) + "</td><td>" + balTxt(band("p90", i)) + "</td><td>" + balTxt(B.det[i]) + "</td></tr>").join("") +
+      '</tbody></table></div><div class="ledger-note">Até quando a reserva dura em cada caminho: mediana ' + exTxt(B.exhaust.p50, p.horizonAge) + "; percentil 25, " + exTxt(B.exhaust.p25, p.horizonAge) + "; percentil 10, " + exTxt(B.exhaust.p10, p.horizonAge) + "; caminho determinístico, " + exTxt(B.exhaust.det, p.horizonAge) + ". A mediana fica abaixo do determinístico porque, com a mesma média de retorno, a oscilação reduz o crescimento composto.</div></div>" +
+      '<div class="sens-wrap"><h4>E se a volatilidade for outra?</h4><p class="lead">Mesmo plano, mesma média de retorno, só a volatilidade muda (' + fmtD(R.sens[0].sims, 0) + " cenários cada). A diferença mostra o quanto a faixa depende de uma premissa que ninguém conhece com precisão.</p>" +
+      '<div class="table-scroll"><table class="sens"><thead><tr><th class="l">Volatilidade</th><th>Saldo na aposentadoria: P10</th><th>Mediana</th><th>P90</th><th>Saldo ao fim: P10</th><th>Percentil 10: reserva dura até</th></tr></thead><tbody>' +
+      R.sens.map((x) => '<tr class="' + (Math.abs(x.vol - m.vol) < 1e-9 ? "hl" : "") + '"><td class="l">' + pct1(x.vol) + (Math.abs(x.vol - m.vol) < 1e-9 ? " (atual)" : "") + "</td><td>" + balTxt(x.bands.p10[ri]) + "</td><td>" + balTxt(x.bands.p50[ri]) + "</td><td>" + balTxt(x.bands.p90[ri]) + "</td><td>" + balTxt(x.terminal.p10) + "</td><td>" + exTxt(x.exhaust.p10, p.horizonAge) + "</td></tr>").join("") + "</tbody></table></div></div>" +
+      '<div class="chart-box"><h3>A ordem dos retornos importa</h3><div class="sub">Mesmo conjunto de ' + R.seq.years + " retornos anuais na aposentadoria (do pior ao melhor ano: " + pct1(R.seq.worst * 100) + " e " + pct1(R.seq.best * 100) + "), mesmo aporte e mesmo gasto. Só mudam de lugar os " + R.seq.window + " piores e os " + R.seq.window + " melhores anos: " + (R.seq.bad.exhaust == null ? "nenhuma das duas ordens esgota a reserva" : "com os piores no início a reserva esgota " + exTxt(R.seq.bad.exhaust, p.horizonAge) + (R.seq.good.exhaust == null ? "; com os melhores no início, ela não esgota" : ", e com os melhores no início, " + exTxt(R.seq.good.exhaust, p.horizonAge))) + '.</div><div class="cv" style="height:240px"><canvas id="chartSeq"></canvas></div></div>' +
+      '<div class="note-box"><b>Por que a seção não mostra uma “probabilidade de sucesso”.</b><ul>' +
+      "<li>Ela depende de volatilidade e distribuição, que ninguém conhece: a tabela acima mostra como o mesmo plano muda de cara.</li>" +
+      "<li>Retornos reais têm caudas pesadas e dependência no tempo, que modelos simples subestimam; e ninguém gasta de forma mecânica: a família ajusta o gasto no meio do caminho.</li>" +
+      "<li>Um número único passa precisão que a análise não tem. A decisão útil é qual margem de segurança e qual regra de ajuste de gasto o cliente aceita; veja também os testes de estresse e o gasto por fases.</li></ul></div>";
+
+    const dsBand = (label, data, fill, color) => ({ label: label, data: floor0(data), borderColor: "transparent", backgroundColor: color, borderWidth: 0, pointRadius: 0, fill: fill, tension: 0.15 });
+    mount("mc", "chartMc", {
+      type: "line",
+      data: { labels: B.ages, datasets: [
+        dsBand("_p10", B.bands.p10, false, "transparent"),
+        dsBand("Faixa P10 a P90", B.bands.p90, "-1", s1w),
+        dsBand("_p25", B.bands.p25, false, "transparent"),
+        dsBand("Faixa P25 a P75", B.bands.p75, "-1", s1w),
+        { label: "Mediana", data: floor0(B.bands.p50), borderColor: s1, backgroundColor: "transparent", borderWidth: 2.5, pointRadius: 0, tension: 0.15 },
+        { label: "Caminho determinístico (retorno constante)", data: floor0(B.det), borderColor: grey, backgroundColor: "transparent", borderWidth: 2, borderDash: [5, 3], pointRadius: 0, tension: 0.15 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 8 } }, interaction: { mode: "index", intersect: false },
+        scales: { x: Object.assign({ title: { display: true, text: "Idade", color: ink, font: { size: 11 } } }, axisStyle(), { ticks: { color: ink, font: { size: 10.5 }, maxTicksLimit: 12 } }), y: Object.assign({ beginAtZero: true }, axisStyle(), { ticks: { color: ink, font: { size: 10.5 }, callback: axisMoney } }) },
+        plugins: { legend: { position: "top", align: "start", labels: { color: ink, boxWidth: 14, boxHeight: 8, font: { size: 11.5 }, filter: (i) => i.text[0] !== "_" } },
+          tooltip: { filter: (it) => it.dataset.label[0] !== "_", callbacks: { title: (it) => "Idade " + it[0].label, label: (it) => it.dataset.label + ": " + balTxt(it.raw) } },
+          retirementLine: { age: p.retireAge, color: cssVar("--brand"), label: "Aposentadoria" } } }
+    });
+    const sq = R.seq;
+    mount("seq", "chartSeq", {
+      type: "line",
+      data: { labels: sq.flat.yearly.map((x) => x.age), datasets: [
+        { label: "Piores anos no início", data: floor0(sq.bad.yearly.map((x) => x.bal)), borderColor: s2, backgroundColor: "transparent", borderWidth: 2.5, pointRadius: 0, tension: 0.15 },
+        { label: "Melhores anos no início", data: floor0(sq.good.yearly.map((x) => x.bal)), borderColor: s3, backgroundColor: "transparent", borderWidth: 2.5, pointRadius: 0, tension: 0.15 },
+        { label: "Retorno constante (determinístico)", data: floor0(sq.flat.yearly.map((x) => x.bal)), borderColor: grey, backgroundColor: "transparent", borderWidth: 2, borderDash: [5, 3], pointRadius: 0, tension: 0.15 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 8 } }, interaction: { mode: "index", intersect: false },
+        scales: { x: Object.assign({ title: { display: true, text: "Idade", color: ink, font: { size: 11 } } }, axisStyle(), { ticks: { color: ink, font: { size: 10.5 }, maxTicksLimit: 12 } }), y: Object.assign({ beginAtZero: true }, axisStyle(), { ticks: { color: ink, font: { size: 10.5 }, callback: axisMoney } }) },
+        plugins: { legend: { position: "top", align: "start", labels: { color: ink, boxWidth: 14, boxHeight: 3, font: { size: 11.5 } } }, tooltip: { callbacks: { title: (it) => "Idade " + it[0].label, label: (it) => it.dataset.label + ": " + balTxt(it.raw) } },
+          retirementLine: { age: p.retireAge, color: cssVar("--brand"), label: "Aposentadoria" } } }
+    });
+  }
+
   /* ================= abas, render global e tema ================= */
-  const TABS = ["diag", "obj", "cx", "prot", "apos", "irm", "ira", "pgbl", "plan", "ver"];
+  const TABS = ["diag", "obj", "cx", "prot", "succ", "apos", "irm", "ira", "pgbl", "plan", "ver"];
   let active = "apos";
   try { const t = localStorage.getItem(TABKEY); if (TABS.includes(t)) active = t; } catch (e) { /* ignore */ }
-  const RENDER = { diag: renderDiag, obj: renderObj, cx: renderCx, prot: renderProt, apos: renderApos, irm: renderIrm, ira: renderIra, pgbl: renderPgbl, plan: renderPlan, ver: renderVer };
+  const RENDER = { diag: renderDiag, obj: renderObj, cx: renderCx, prot: renderProt, succ: renderSucc, apos: renderApos, irm: renderIrm, ira: renderIra, pgbl: renderPgbl, plan: renderPlan, ver: renderVer };
   function renderAll() {
     document.querySelectorAll("[data-client-line]").forEach((el) => { el.textContent = state.client.name ? "Cliente: " + state.client.name : "Cenário sem nome de cliente"; });
     $("whoLine").textContent = state.client.name || "";
@@ -1147,10 +1276,24 @@
   function updateDownloadUI() {
     const has = !!downloadsNS, pdfOk = has && typeof window.html2pdf === "function";
     $("btnExportFile").hidden = !has;
-    ["btnPdfDiag", "btnPdfApos", "btnPdfIrm", "btnPdfIra", "btnPdfPgbl", "btnPdfPlan", "btnPdfObj", "btnPdfCx", "btnPdfProt", "btnPdfVer"].forEach((id) => { $(id).hidden = !pdfOk; });
+    ["btnPdfDiag", "btnPdfApos", "btnPdfIrm", "btnPdfIra", "btnPdfPgbl", "btnPdfPlan", "btnPdfObj", "btnPdfCx", "btnPdfProt", "btnPdfSucc", "btnPdfVer"].forEach((id) => { $(id).hidden = !pdfOk; });
+  }
+  // Fora do claude.ai (arquivo aberto no navegador, site próprio): o salvamento vira um download comum.
+  function anchorSave(opts) {
+    return new Promise((resolve, reject) => {
+      try {
+        const data = opts.data, blob = data instanceof Blob ? data : new Blob([data], { type: /\.json$/i.test(opts.filename) ? "application/json" : "text/plain" });
+        const url = URL.createObjectURL(blob), a = document.createElement("a");
+        a.href = url; a.download = opts.filename; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000); resolve({ status: "saved" });
+      } catch (e) { reject(e); }
+    });
   }
   (async function () {
-    try { if (window.claude && typeof window.claude.use === "function") downloadsNS = await window.claude.use("downloads"); } catch (e) { downloadsNS = null; }
+    try {
+      if (window.claude && typeof window.claude.use === "function") downloadsNS = await window.claude.use("downloads");
+      else if (typeof window.claude === "undefined") downloadsNS = { save: anchorSave };
+    } catch (e) { downloadsNS = null; }
     updateDownloadUI();
   })();
   const say = (msg) => { $("saveIndicator").textContent = msg; };
@@ -1180,7 +1323,7 @@
     });
   }
 
-  const PDF_SHEETS = { btnPdfDiag: ["sheetDiag", "asset-planning-diagnostico.pdf"], btnPdfPlan: ["sheetPlan", "asset-planning-plano-de-acao.pdf"], btnPdfApos: ["sheetApos", "asset-planning-aposentadoria.pdf"], btnPdfIrm: ["sheetIrm", "asset-planning-irpf-mensal.pdf"], btnPdfIra: ["sheetIra", "asset-planning-irpf-anual-pgbl.pdf"], btnPdfPgbl: ["sheetPgbl", "asset-planning-pgbl-longo-prazo.pdf"], btnPdfObj: ["sheetObj", "asset-planning-objetivos.pdf"], btnPdfCx: ["sheetCx", "asset-planning-caixa-e-dividas.pdf"], btnPdfProt: ["sheetProt", "asset-planning-protecao.pdf"], btnPdfVer: ["sheetVer", "asset-planning-versoes.pdf"] };
+  const PDF_SHEETS = { btnPdfDiag: ["sheetDiag", "asset-planning-diagnostico.pdf"], btnPdfPlan: ["sheetPlan", "asset-planning-plano-de-acao.pdf"], btnPdfApos: ["sheetApos", "asset-planning-aposentadoria.pdf"], btnPdfIrm: ["sheetIrm", "asset-planning-irpf-mensal.pdf"], btnPdfIra: ["sheetIra", "asset-planning-irpf-anual-pgbl.pdf"], btnPdfPgbl: ["sheetPgbl", "asset-planning-pgbl-longo-prazo.pdf"], btnPdfObj: ["sheetObj", "asset-planning-objetivos.pdf"], btnPdfCx: ["sheetCx", "asset-planning-caixa-e-dividas.pdf"], btnPdfProt: ["sheetProt", "asset-planning-protecao.pdf"], btnPdfSucc: ["sheetSucc", "asset-planning-sucessao.pdf"], btnPdfVer: ["sheetVer", "asset-planning-versoes.pdf"] };
   Object.keys(PDF_SHEETS).forEach((id) => {
     $(id).addEventListener("click", async () => {
       if (!downloadsNS || typeof window.html2pdf !== "function") return;
@@ -1238,6 +1381,9 @@
   $("qualGrid").innerHTML = [["liquid", "Recursos financeiros"], ["illiquid", "Patrimônio imobilizado"], ["debts", "Dívidas"], ["income", "Receita mensal"], ["expense", "Despesa mensal"], ["executed", "Aporte realizado"], ["desired", "Padrão de vida desejado"], ["rates", "Retorno e inflação"]].map(([k, l]) => "<div><label>" + l + '</label><select data-path="quality.' + k + '">' + L_QUALITY.map((o) => '<option value="' + o[0] + '">' + o[1] + "</option>").join("") + "</select></div>").join("");
   Engine.setTaxProvider((m) => Irpf.withdrawalTax(m.taxRows, m.irpf.vig, m.retTax.manual).tau);
   $("goDiag").addEventListener("click", () => setTab("diag"));
+  $("succPresetExtra").addEventListener("click", succPreset("extrajudicial"));
+  $("succPresetJud").addEventListener("click", succPreset("judicial"));
+  $("mcReseed").addEventListener("click", () => { state.mc.seed = 1 + Math.floor(Math.random() * 999999); fillAll(); renderAll(); scheduleSave(); });
   $("aoiPick").addEventListener("change", () => { state.debtPlan.pickId = Number($("aoiPick").value) || 0; renderAll(); scheduleSave(); });
   armed($("addPhaseEx"), "Clique de novo: substituir as fases", () => {
     const D = state.cashflow.desiredWithdrawal, r = state.profile.retireAge;

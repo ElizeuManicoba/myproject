@@ -8,6 +8,7 @@
     <button class="tab" role="tab" data-tab="obj" aria-selected="false">Objetivos</button>
     <button class="tab" role="tab" data-tab="cx" aria-selected="false">Caixa e dívidas</button>
     <button class="tab" role="tab" data-tab="prot" aria-selected="false">Proteção</button>
+    <button class="tab" role="tab" data-tab="succ" aria-selected="false">Sucessão</button>
     <button class="tab" role="tab" data-tab="apos" aria-selected="true">Aposentadoria</button>
     <span class="tab-sep" aria-hidden="true"></span>
     <button class="tab" role="tab" data-tab="irm" aria-selected="false">IRPF mensal</button>
@@ -324,6 +325,20 @@
         <div id="taxResult"></div>
       </section>
 
+      <section class="block">
+        <div class="keep"><div class="eyebrow"><span>Cenários simulados (Monte Carlo)</span></div>
+        <div class="form-card no-pdf">
+          <h3>Premissas da simulação</h3>
+          <div class="card-hint"><b>Leia antes:</b> isto não é probabilidade de sucesso nem previsão. Mostra a <b>faixa de resultados</b> que as premissas abaixo produzem quando os retornos oscilam de mês a mês. Volatilidade e tipo de distribuição são hipóteses que ninguém conhece com precisão, e a faixa muda muito com elas: por isso a seção mostra também o que acontece quando essas premissas mudam.</div>
+          <div class="frow"><div class="fl">Volatilidade anual do retorno real<small>Desvio-padrão dos retornos. Carteiras de renda fixa pós ficam perto de 2% a 4%; carteiras com renda variável, de 10% a 20% (valores de referência, não regras).</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="mc.vol" data-pct="1"></div></div>
+          <div class="frow"><div class="fl">Distribuição dos retornos<small>Caudas pesadas dão mais peso a meses extremos, com a mesma volatilidade.</small></div><div class="fi" style="width:230px"><select data-path="mc.dist"><option value="normal">Normal</option><option value="tstudent">Caudas pesadas (t de Student, 4 g.l.)</option></select></div></div>
+          <div class="frow"><div class="fl">Plano simulado<small>Qual aporte e qual gasto entram na simulação.</small></div><div class="fi" style="width:230px"><select data-path="mc.scenario"><option value="atual">Plano atual (aporte realizado)</option><option value="consumir">Com o aporte adicional que consome a reserva</option></select></div></div>
+          <div class="frow"><div class="fl">Número de cenários simulados<small>Mais cenários suavizam a faixa; não mudam a premissa.</small></div><div class="fi"><select data-path="mc.sims" data-num="1"><option value="500">500</option><option value="1000">1.000</option><option value="2000">2.000</option><option value="5000">5.000</option><option value="10000">10.000</option></select></div></div>
+          <div class="frow"><div class="fl">Amostra (semente)<small>A mesma semente repete exatamente o resultado.</small></div><div class="fi" style="display:flex;gap:8px;width:230px"><input type="number" min="1" step="1" data-path="mc.seed" style="text-align:right"><button class="btn-small" id="mcReseed" type="button" style="white-space:nowrap">Sortear outra</button></div></div>
+        </div></div>
+        <div id="mcResult"></div>
+      </section>
+
       <section class="block keep">
         <div class="eyebrow"><span>Projeção da reserva</span></div>
         <div class="chart-panel">
@@ -360,7 +375,7 @@
       </section>
 
       <footer class="methodology">
-        <b>Metodologia.</b> A taxa real é obtida pela equação de Fisher — (1+juros)/(1+inflação)−1 — e todos os fluxos são simulados mês a mês em poder de compra constante (R$ de hoje). “Consumir a Reserva” esgota o patrimônio financeiro (respeitado o legado mínimo) até a idade-limite; “Preservar a Reserva” mantém o valor real da reserva de aposentadoria. O <b>índice de cobertura</b> compara o padrão de vida que o patrimônio projetado sustenta com o desejado; ele <b>não é uma probabilidade de sucesso</b>. O modelo usa taxa constante (sem Monte Carlo), considera o IR sobre os saques apenas se a seção “IR sobre o resgate” estiver ativada, não considera custos de transação, e depende das premissas informadas — por isso o relatório traz o teste de sensibilidade.
+        <b>Metodologia.</b> A taxa real é obtida pela equação de Fisher — (1+juros)/(1+inflação)−1 — e todos os fluxos são simulados mês a mês em poder de compra constante (R$ de hoje). “Consumir a Reserva” esgota o patrimônio financeiro (respeitado o legado mínimo) até a idade-limite; “Preservar a Reserva” mantém o valor real da reserva de aposentadoria. O <b>índice de cobertura</b> compara o padrão de vida que o patrimônio projetado sustenta com o desejado; ele <b>não é uma probabilidade de sucesso</b>. O modelo principal usa taxa constante; a seção “Cenários simulados” mostra faixas de resultado sob premissas explícitas de volatilidade, sem calcular probabilidade de sucesso. O IR sobre os saques só é considerado se a seção “IR sobre o resgate” estiver ativada, custos de transação não entram, e tudo depende das premissas informadas — por isso o relatório traz o teste de sensibilidade.
       </footer>
       <div class="disclaimer-slot"></div>
     </div>
@@ -515,6 +530,40 @@
       </div>
       <div id="verCompare"></div></div>
     </section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= SUCESSÃO ======================= -->
+<div class="pane pane-scroll" id="pane-succ">
+  <div class="sheet narrow" id="sheetSucc">
+    <div class="masthead">
+      <div><h2>Liquidez para a sucessão</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfSucc" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Como funciona.</b> Estima quanto o inventário custaria e se a família teria caixa para pagá-lo sem vender bens às pressas. Contas e investimentos no nome de quem falece costumam ficar bloqueados até a autorização do inventário; por isso o que conta é a liquidez <b>fora</b> do inventário. É uma estimativa de ordem de grandeza. Regime de bens, ITCMD e honorários variam por estado e caso: confirme com um advogado. Testamento, doação e estruturas societárias são matéria jurídica e ficam fora deste cálculo.</div>
+    <div class="sticky-sum no-pdf" id="succSticky"></div>
+
+    <div class="form-card no-pdf">
+      <h3>Premissas</h3>
+      <div class="card-actions" style="padding-top:10px"><button class="btn-add" id="succPresetExtra" type="button">Valores típicos: inventário extrajudicial</button><button class="btn-add" id="succPresetJud" type="button">Valores típicos: inventário judicial</button><span class="toast" id="succToast"></span></div>
+      <label class="switch-row" style="padding:6px 0 10px"><input type="checkbox" data-path="succ.spouse"><span>Há cônjuge ou companheiro(a) sobrevivente</span></label>
+      <div class="frow"><div class="fl">Regime de bens<small>Define a meação: parte do patrimônio que já pertence ao cônjuge e não é herança.</small></div><div class="fi" style="width:260px"><select data-path="succ.regime"><option value="comunhao_parcial">Comunhão parcial de bens</option><option value="comunhao_universal">Comunhão universal de bens</option><option value="separacao">Separação de bens</option><option value="participacao">Participação final nos aquestos</option></select></div></div>
+      <div class="frow" id="succCommonRow"><div class="fl">Parcela do patrimônio adquirida em comum<small>% dos bens comprados durante o casamento (comunhão parcial). Bens anteriores, doados ou herdados ficam fora da meação.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.commonPct" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Herdeiros<small>Descendentes, ascendentes e cônjuge, quando herdeiros. Com herdeiros necessários, metade do patrimônio é indisponível (legítima).</small></div><div class="fi"><input type="number" min="0" max="30" data-path="succ.heirs"></div></div>
+      <div class="frow"><div class="fl">ITCMD<small>Imposto estadual sobre a herança. Em geral de 2% a 8%; a alíquota efetiva depende do estado e do valor.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.itcmd" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Honorários advocatícios<small>% do monte-mor.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.fees" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Custas, emolumentos e certidões<small>% do monte-mor.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.costs" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Duração do inventário<small>Meses de custo de manutenção dos bens.</small></div><div class="fi"><input type="number" min="0" max="120" data-path="succ.months"></div></div>
+      <div class="frow"><div class="fl">Custo mensal de manter os bens<small>IPTU, condomínio, seguros e conservação dos imóveis durante o inventário (R$/mês).</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="succ.carry" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Previdência privada fora do inventário<small id="succPensionHint">Em branco: soma os ativos cujo nome indica PGBL, VGBL ou previdência.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="succ.pensionOverride" data-money="1" data-nullable="1" placeholder="Automático"></div></div>
+    </div>
+
+    <section class="block keep"><div class="eyebrow"><span>Panorama</span></div><div class="kpi-row" id="succKpis"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Do patrimônio ao inventário</span></div><div id="succFlow"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Custos e liquidez</span></div><div id="succCosts"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Se a alíquota do ITCMD for outra</span></div><div id="succSens"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Premissas e limites</span></div><div id="succNotes"></div></section>
     <div class="disclaimer-slot"></div>
   </div>
 </div>
