@@ -16,9 +16,9 @@ const { go } = require('./nav.js');
   for (const [id, name] of [['phaseRows', 'ph'], ['taxRows', 'tx']]) {
     await page.evaluate((id) => { document.getElementById(id).scrollIntoView({ block: 'start' }); }, id);
     await page.waitForTimeout(300);
-    await page.screenshot({ path: `ap_${name}_a.png` });
+    await page.screenshot({ path: require("os").tmpdir() + `/ap_${name}_a.png` });
     await page.mouse.wheel(0, 780); await page.waitForTimeout(300);
-    await page.screenshot({ path: `ap_${name}_b.png` });
+    await page.screenshot({ path: require("os").tmpdir() + `/ap_${name}_b.png` });
   }
   console.log('ERRORS:', errs.length ? errs.join('\n') : 'nenhum');
   await browser.close();
