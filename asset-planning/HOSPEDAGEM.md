@@ -1,22 +1,24 @@
 # Hospedagem gratuita no GitHub Pages
 
 O site pronto para publicar fica na pasta **`docs/`, na raiz do repositório**. O GitHub Pages só publica a raiz ou
-essa pasta, por isso o `build.py` grava lá. O endereço será:
+essa pasta, por isso o `build.py` grava lá. O endereço do GitHub Pages é sempre
+`https://USUARIO.github.io/NOME-DO-REPOSITORIO/`. Para o link dizer claramente **assetplanning**, o repositório
+deve se chamar `assetplanning`:
 
-    https://elizeumanicoba.github.io/myproject/
+    https://elizeumanicoba.github.io/assetplanning/
 
 ## 1. Publicar (uma única vez, uns 3 minutos)
 
-1. Abra o repositório no GitHub e entre em **Settings → Pages** (menu lateral, em *Code and automation*).
-2. Em **Build and deployment → Source**, escolha **Deploy from a branch**.
-3. Em **Branch**, escolha a branch que tem a pasta `docs/` e, ao lado, a pasta **`/docs`**. Clique em **Save**.
-   - Agora: `claude/retirement-planning-tool-op40lw`.
-   - Depois de mesclar na `master`: troque para `master` e mantenha `/docs`.
-4. Espere de 1 a 3 minutos e recarregue a página de Settings → Pages. Aparece *“Your site is live at …”*.
-5. Abra o endereço no computador e no celular. A primeira tela é a **Abertura da reunião**.
+1. **Renomear o repositório:** no GitHub, **Settings → General → Repository name**, digite `assetplanning` e
+   clique em **Rename**. O link antigo continua redirecionando.
+2. Entre em **Settings → Pages** (menu lateral, em *Code and automation*).
+3. Em **Build and deployment → Source**, escolha **Deploy from a branch**.
+4. Em **Branch**, escolha **`master`** e, ao lado, a pasta **`/docs`**. Clique em **Save**.
+5. Espere de 1 a 3 minutos e recarregue a página de Settings → Pages. Aparece *“Your site is live at …”*.
+6. Abra o endereço no computador e no celular. A primeira tela é a **Abertura da reunião**.
 
-No plano gratuito do GitHub, o Pages exige repositório **público**. Se o repositório for privado, torne-o público
-(Settings → General → Danger Zone → Change visibility) ou use uma das alternativas da seção 6.
+No plano gratuito do GitHub, o Pages exige repositório **público** (este já é). Para um repositório privado ou
+acesso com senha, veja a seção 6.
 
 ## 2. Usar no celular e no tablet
 
@@ -51,11 +53,8 @@ instalada. Recarregue a página”*. Os dados salvos não são afetados.
 
 ## 5. Opcional
 
-- **Nome do endereço:** renomear o repositório (Settings → General → Repository name) muda a URL para
-  `…github.io/novo-nome/`. O app usa caminhos relativos e continua funcionando; os dados do navegador continuam
-  no mesmo domínio, mas lembre de reinstalar o atalho do celular.
-- **Domínio próprio** (cerca de R$ 40 por ano): Settings → Pages → **Custom domain**. Dá um link profissional e
-  separa os dados do app de qualquer outro site do GitHub.
+- **Domínio próprio**, como `assetplanning.com.br` (cerca de R$ 40 por ano, comprado em um registrador): Settings →
+  Pages → **Custom domain**. Dá um link mais curto e separa os dados do app de qualquer outro site do GitHub.
 
 ## 6. Se precisar de acesso restrito
 
