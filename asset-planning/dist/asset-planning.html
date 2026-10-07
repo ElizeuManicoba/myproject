@@ -631,6 +631,13 @@
 
   .tab{ padding:0 11px; }
 
+  /* segurança dos dados */
+  .safety-box{ border-radius:var(--radius-s); padding:9px 12px; font-size:12px; line-height:1.5; border-left:3px solid var(--hairline-strong); background:var(--surface); }
+  .safety-box.warn{ border-left-color:var(--status-warning); background:var(--status-warning-wash); }
+  .safety-box.ok{ border-left-color:var(--status-good); background:var(--status-good-wash); }
+  .safety-note{ font-size:11.5px; color:var(--ink-secondary); line-height:1.5; margin-top:8px; }
+  .safety-note b{ color:var(--ink); }
+
 </style>
 
 <div class="topbar">
@@ -861,6 +868,7 @@
     <details class="grp">
       <summary><span class="grp-title"><span class="grp-icon" data-icon="backup"></span>Backup e privacidade</span></summary>
       <div class="grp-body backup-area">
+        <div class="data-safety-slot"></div>
         <div class="banner warn" style="margin:0">O backup contém toda a situação financeira (inclusive as versões salvas) em texto aberto. Não envie por e-mail ou mensageiro.</div>
         <div class="btn-line">
           <button class="btn-small primary" id="btnExportFile" type="button">Salvar backup (.json)</button>
@@ -868,7 +876,7 @@
         </div>
         <div class="field">
           <label>Ou copie o texto do backup</label>
-          <textarea id="backupExport" readonly onclick="this.select()"></textarea>
+          <textarea id="backupExport" readonly></textarea>
         </div>
         <div class="field">
           <label>Colar para restaurar</label>
@@ -4061,7 +4069,7 @@ if (typeof module !== "undefined") module.exports = Versions;
     const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
     document.querySelectorAll("[data-today]").forEach((el) => { el.textContent = today; });
     RENDER[active]();
-    renderDisclaimers();
+    renderDisclaimers(); renderDataSafety();
     const bk = $("backupExport").closest("details"); if (bk && bk.open) $("backupExport").value = JSON.stringify(state, null, 2);
   }
   function setTab(t) {
@@ -4112,11 +4120,46 @@ if (typeof module !== "undefined") module.exports = Versions;
     updateDownloadUI();
   })();
   const say = (msg) => { $("saveIndicator").textContent = msg; };
+
+  /* ================= segurança dos dados: backup, armazenamento persistente, instalação ================= */
+  const LASTBK = "asset-planning-lastbackup", BACKUP_DAYS = 14;
+  const buildId = () => { const m = document.querySelector('meta[name="build-id"]'); return m ? m.content : ""; };
+  const isStandaloneApp = () => (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isHosted = () => document.documentElement.dataset.host === "pages";
+  let storagePersisted = null, installEvt = null;
+  function lastBackup() { try { const v = localStorage.getItem(LASTBK); return v ? new Date(v) : null; } catch (e) { return null; } }
+  function markBackup() { try { localStorage.setItem(LASTBK, new Date().toISOString()); } catch (e) { /* ignore */ } renderDataSafety(); }
+  function backupAgeDays() { const d = lastBackup(); return d && !isNaN(d) ? Math.floor((Date.now() - d.getTime()) / 864e5) : null; }
+  function renderDataSafety() {
+    const age = backupAgeDays(), d = lastBackup();
+    const overdue = age == null || age > BACKUP_DAYS;
+    let html = '<div class="safety-box ' + (overdue ? "warn" : "ok") + '"><b>' + (age == null ? "Nenhum backup em arquivo neste aparelho." : "Último backup: " + d.toLocaleDateString("pt-BR") + " (" + (age === 0 ? "hoje" : "há " + age + (age === 1 ? " dia" : " dias")) + ").") + "</b> " +
+      (overdue ? "Os dados ficam só neste navegador: se o histórico for limpo ou o aparelho trocado, eles se perdem. Salve um backup em arquivo e guarde em local seguro." : "Mantenha o hábito: salve um novo backup depois de cada reunião.") + "</div>";
+    if (storagePersisted === false) html += '<div class="safety-note">O navegador ainda não marcou este armazenamento como permanente; o backup em arquivo é a garantia.</div>';
+    if (isIOS() && !isStandaloneApp() && isHosted()) html += '<div class="safety-note"><b>iPhone e iPad:</b> o Safari pode apagar os dados de um site sem uso por 7 dias. Para evitar, toque em Compartilhar e em “Adicionar à Tela de Início”, e abra o app por esse ícone.</div>';
+    if (installEvt) html += '<div class="safety-note"><button class="btn-small primary" type="button" data-install="1">Instalar como aplicativo</button> Abre em janela própria e funciona sem internet.</div>';
+    if (buildId()) html += '<div class="safety-note">Versão do app: ' + esc(buildId()) + (isStandaloneApp() ? " (instalado)" : "") + "</div>";
+    document.querySelectorAll(".data-safety-slot").forEach((el) => { el.innerHTML = html; el.querySelectorAll("[data-install]").forEach((b) => b.addEventListener("click", async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { /* ignore */ } installEvt = null; renderDataSafety(); })); });
+  }
+  async function askPersist() {
+    try { if (navigator.storage && navigator.storage.persist) { storagePersisted = (await navigator.storage.persisted()) || (await navigator.storage.persist()); renderDataSafety(); } } catch (e) { /* ignore */ }
+  }
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; renderDataSafety(); });
+  window.addEventListener("appinstalled", () => { installEvt = null; renderDataSafety(); });
+  document.addEventListener("pointerdown", askPersist, { once: true });
+  if (isHosted() && "serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js").catch(() => { /* sem service worker o app segue funcionando online */ });
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController) $("saveIndicator").textContent = "Nova versão do app instalada. Recarregue a página para usá-la."; });
+  }
+  $("backupExport").addEventListener("click", function () { this.select(); });
+
   function dlError(e) { say(e && e.code === "declined" ? "Salvamento cancelado." : "Não foi possível salvar o arquivo neste ambiente."); }
 
   $("btnExportFile").addEventListener("click", async () => {
     if (!downloadsNS) return;
-    try { await downloadsNS.save({ filename: "asset-planning-backup.json", data: JSON.stringify(state, null, 2) }); say("Backup salvo."); } catch (e) { dlError(e); }
+    try { await downloadsNS.save({ filename: "asset-planning-backup.json", data: JSON.stringify(state, null, 2) }); markBackup(); say("Backup salvo."); } catch (e) { dlError(e); }
   });
 
   // PDF: campos de formulário viram texto que quebra linha (input/textarea cortam texto longo); "Como ler" aberto

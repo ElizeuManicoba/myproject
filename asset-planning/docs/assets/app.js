@@ -1,3 +1,1456 @@
+/* ENGINE:BEGIN — puro, sem DOM. Valores em R$ de hoje (poder de compra constante). */
+const Engine = (function () {
+  "use strict";
+
+  /* ---------- números e estado ---------- */
+  function parseLocaleNumber(v, percent) {
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    let s = String(v == null ? "" : v).trim().replace(/[^\d.,\-]/g, "");
+    if (!s || s === "-") return 0;
+    const neg = s.charAt(0) === "-";
+    s = s.replace(/-/g, "");
+    const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+    let out;
+    if (lc > -1 && ld > -1) {
+      out = lc > ld ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+    } else if (lc > -1) {
+      out = s.split(",").length === 2 ? s.replace(",", ".") : s.replace(/,/g, "");
+    } else if (ld > -1) {
+      const parts = s.split(".");
+      if (parts.length === 2) {
+        const thousandsLike = parts[1].length === 3 && parts[0].length >= 1 && parts[0].length <= 3 && parts[0] !== "0";
+        out = (thousandsLike && !percent) ? parts.join("") : s;
+      } else out = parts.join("");
+    } else out = s;
+    const n = parseFloat(out);
+    return isNaN(n) ? 0 : (neg ? -n : n);
+  }
+
+  function defaultState() {
+    return {
+      meta: { version: 5 },
+      client: { name: "" },
+      profile: { currentAge: 45, retireAge: 65, horizonAge: 100 },
+      assets: { illiquid: 1000000, liquid: 1000000, illiquidRealGrowth: 0, debts: 40000 },
+      rates: { nominal: 11, inflation: 5.5, differentiate: false, nominalPost: 11, inflationPost: 5.5 },
+      cashflow: { income: 25000, expense: 18000, executed: 7000, desiredWithdrawal: 30000, minLegacy: 0, escalate: true },
+      extraMonthly: [],
+      extraAnnual: [],
+      retIncome: [],
+      quality: { liquid: "declarada", illiquid: "declarada", debts: "declarada", income: "declarada", expense: "declarada", executed: "declarada", desired: "declarada", rates: "estimada" },
+      stress: {
+        cons: { dRet: -1.5, dAporte: -15, dGasto: 0, shock: 0, custo: 100000, custoIdade: 70, dHor: 0 },
+        crise: { dRet: -1, dAporte: 0, dGasto: 0, shock: 30, custo: 0, custoIdade: 70, dHor: 0 },
+        long: { dRet: 0, dAporte: 0, dGasto: 0, shock: 0, custo: 0, custoIdade: 70, dHor: 10 },
+        flex: { dRet: 0, dAporte: 0, dGasto: -20, shock: 0, custo: 0, custoIdade: 70, dHor: 0 }
+      },
+      diag: {
+        shocks: 0, monthsOverride: null,
+        risk: { variable: false, single: false, dependents: false, health: false, lowEmploy: false },
+        targets: { savings: 20, debtLoad: 30, leverage: 40, solvency: 60, concentration: 30 },
+        bsAssets: [
+          { id: 1, label: "Imóvel residencial", value: 1000000, liq: "iliquida", purpose: "uso", quality: "declarada" },
+          { id: 2, label: "Tesouro Selic (reserva)", value: 100000, liq: "imediata", purpose: "reserva", quality: "confirmada" },
+          { id: 3, label: "CDB — Banco A", value: 200000, liq: "longa", purpose: "aposentadoria", quality: "confirmada" },
+          { id: 4, label: "CDB — Banco B", value: 150000, liq: "longa", purpose: "aposentadoria", quality: "confirmada" },
+          { id: 5, label: "LCI/LCA", value: 150000, liq: "longa", purpose: "aposentadoria", quality: "confirmada" },
+          { id: 6, label: "Fundo multimercado X", value: 150000, liq: "longa", purpose: "aposentadoria", quality: "declarada" },
+          { id: 7, label: "Fundo de ações Y", value: 150000, liq: "longa", purpose: "aposentadoria", quality: "declarada" },
+          { id: 8, label: "Fundos imobiliários", value: 100000, liq: "curta", purpose: "aposentadoria", quality: "declarada" },
+          { id: 9, label: "Previdência privada (PGBL)", value: 100000, liq: "longa", purpose: "aposentadoria", quality: "confirmada" }
+        ],
+        bsLiabilities: [
+          { id: 1, label: "Financiamento de veículo", balance: 40000, cet: 18.5, payment: 1800, months: 24, quality: "confirmada" }
+        ],
+        flow: [
+          { id: 1, label: "Salário líquido", kind: "receita", value: 25000, freq: "mensal", nature: "recorrente", control: "essencial", quality: "confirmada" },
+          { id: 2, label: "Bônus anual", kind: "receita", value: 30000, freq: "anual", nature: "extraordinaria", control: "essencial", quality: "estimada" },
+          { id: 3, label: "Moradia e condomínio", kind: "despesa", value: 4500, freq: "mensal", nature: "recorrente", control: "contratual", quality: "confirmada" },
+          { id: 4, label: "Plano de saúde", kind: "despesa", value: 1500, freq: "mensal", nature: "recorrente", control: "contratual", quality: "confirmada" },
+          { id: 5, label: "Educação", kind: "despesa", value: 1000, freq: "mensal", nature: "recorrente", control: "contratual", quality: "declarada" },
+          { id: 6, label: "IPTU, IPVA e seguros", kind: "despesa", value: 14400, freq: "anual", nature: "sazonal", control: "contratual", quality: "estimada" },
+          { id: 7, label: "Alimentação", kind: "despesa", value: 3500, freq: "mensal", nature: "recorrente", control: "essencial", quality: "declarada" },
+          { id: 8, label: "Transporte", kind: "despesa", value: 1200, freq: "mensal", nature: "recorrente", control: "essencial", quality: "declarada" },
+          { id: 9, label: "Lazer e viagens", kind: "despesa", value: 2000, freq: "mensal", nature: "recorrente", control: "discricionaria", quality: "estimada" },
+          { id: 10, label: "Outras despesas", kind: "despesa", value: 1300, freq: "mensal", nature: "recorrente", control: "discricionaria", quality: "estimada" }
+        ]
+      },
+      actions: [],
+      memos: [],
+      phases: { on: false },
+      phaseRows: [],
+      retTax: { on: false, manual: null },
+      taxRows: [],
+      goalsCfg: { realReturn: 3 },
+      goals: [
+        { id: 1, label: "Faculdade dos filhos", kind: "educacao", amount: 120000, year: 2032, priority: "essencial", saved: 0, rate: null },
+        { id: 2, label: "Troca de carro", kind: "veiculo", amount: 80000, year: 2029, priority: "importante", saved: 0, rate: null },
+        { id: 3, label: "Viagem em família", kind: "viagem", amount: 40000, year: 2028, priority: "desejo", saved: 0, rate: null }
+      ],
+      debtPlan: { extra: 1000, strategy: "avalanche", altReturn: null, lump: 20000, pickId: 0 },
+      protect: {
+        deps: 2, supportYears: 15, survivorIncome: 8000, needPct: 75, pension: 0,
+        finalFixed: 20000, estatePct: 4, debtsPaid: true, transitionMonths: 6, includeEducation: true, existingLife: 0,
+        disabPension: 0, careMonthly: 0, careYears: 20, existingDisab: 0, usePct: 0, rate: 3
+      },
+      mc: { sims: 2000, vol: 10, dist: "normal", seed: 1, scenario: "atual" },
+      succ: { spouse: true, regime: "comunhao_parcial", commonPct: 100, heirs: 2, itcmd: 4, fees: 4, costs: 1.5, months: 6, carry: 1500, pensionOverride: null },
+      versions: [],
+      pro: { name: "", cert: "", cvm: "nao", cvmNo: "", scope: "", fee: "", conflicts: "" },
+      irpf: {
+        vig: "2026",
+        mensal: { rend: 25000, inss: 900, dep: 0, pensao: 0, outras: 0 },
+        anual: { rend: 300000, irrf: 68000, inss: 11000, dep: 0, instr: 0, med: 10000, outras: 0, aporte: null },
+        proj: { renda: 300000, pct: 12, cdi: 10.5, taxa: 0.5, anos: 15, aliq: 27.5 }
+      }
+    };
+  }
+
+  const ROW_SCHEMAS = {
+    extraMonthly: { ageFrom: 65, ageTo: 100, value: 0, label: "" },
+    extraAnnual: { age: 65, ageTo: null, value: 0, label: "" },
+    retIncome: { ageFrom: 65, value: 0, label: "" },
+    bsAssets: { label: "", value: 0, liq: "longa", purpose: "aposentadoria", quality: "declarada" },
+    bsLiabilities: { label: "", balance: 0, cet: 0, payment: 0, months: 0, quality: "declarada" },
+    flow: { label: "", kind: "despesa", value: 0, freq: "mensal", nature: "recorrente", control: "essencial", quality: "declarada" },
+    actions: { title: "", priority: "media", owner: "cliente", dep: "", due: "", cost: "", evidence: "", status: "nao_iniciada", next: "", source: "" },
+    memos: { title: "", frame: "planejamento", problem: "", evidence: "", alternatives: "", chosen: "", assumptions: "", risks: "", inaction: "", owner: "", review: "", actionId: 0 },
+    phaseRows: { ageFrom: 75, pct: 100, health: 0, label: "" },
+    taxRows: { label: "", kind: "tributavel", value: 0, gainPct: 50, regime: "regressivo", years: 10, monthly: 0 },
+    goals: { label: "", kind: "outro", amount: 0, year: 0, priority: "importante", saved: 0, rate: null }
+  };
+  const QUALITY = ["confirmada", "declarada", "estimada", "pendente"];
+  const ENUMS = {
+    "bsAssets.liq": ["imediata", "curta", "longa", "iliquida"],
+    "bsAssets.purpose": ["reserva", "aposentadoria", "objetivos", "uso", "negocio", "outro"],
+    "bsAssets.quality": QUALITY, "bsLiabilities.quality": QUALITY, "flow.quality": QUALITY,
+    "flow.kind": ["receita", "despesa"], "flow.freq": ["mensal", "trimestral", "semestral", "anual"],
+    "flow.nature": ["recorrente", "sazonal", "extraordinaria"], "flow.control": ["contratual", "essencial", "discricionaria"],
+    "actions.priority": ["critica", "alta", "media", "baixa"], "actions.owner": ["cliente", "planejador", "especialista"],
+    "actions.status": ["nao_iniciada", "em_curso", "bloqueada", "concluida"], "memos.frame": ["planejamento", "valores_mobiliarios"],
+    "taxRows.kind": ["pgbl", "vgbl", "tributavel", "isento"], "taxRows.regime": ["regressivo", "progressivo"],
+    "goals.kind": ["educacao", "imovel", "veiculo", "viagem", "familia", "negocio", "saude", "outro"], "goals.priority": ["essencial", "importante", "desejo"]
+  };
+  const STRATEGIES = ["avalanche", "bola", "fluxo"];
+  const MC_DISTS = ["normal", "tstudent"], MC_SCEN = ["atual", "consumir"], REGIMES = ["comunhao_parcial", "comunhao_universal", "separacao", "participacao"];
+  const MAX_VERSIONS = 12;
+  const MAXLEN = { problem: 2000, evidence: 2000, alternatives: 2000, chosen: 2000, assumptions: 2000, risks: 2000, inaction: 1000, scope: 1000, fee: 500, conflicts: 1000, dep: 300, cost: 200, next: 400, title: 160 };
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function coerce(def, src, key) {
+    if (typeof def === "number") {
+      if (typeof src === "number") return isFinite(src) ? src : def;
+      if (typeof src === "string" && /\d/.test(src)) return parseLocaleNumber(src);
+      return def;
+    }
+    if (typeof def === "boolean") return src === undefined ? def : !!src;
+    if (typeof def === "string") return src == null ? def : String(src).slice(0, MAXLEN[key] || 200);
+    if (def === null) {
+      if (src === null || src === undefined || src === "") return null;
+      const n = Number(src);
+      return isFinite(n) ? n : null;
+    }
+    return def;
+  }
+
+  function mergeObj(def, src) {
+    const out = {};
+    Object.keys(def).forEach(function (k) {
+      const d = def[k], s = src && typeof src === "object" ? src[k] : undefined;
+      if (ROW_SCHEMAS[k]) {
+        out[k] = (Array.isArray(s) ? s : []).slice(0, 80).map(function (row, i) {
+          const r = mergeObj(ROW_SCHEMAS[k], row);
+          Object.keys(r).forEach(function (f) { const list = ENUMS[k + "." + f]; if (list && list.indexOf(r[f]) === -1) r[f] = ROW_SCHEMAS[k][f]; });
+          if ("due" in r && r.due && !DATE_RE.test(r.due)) r.due = "";
+          r.id = (row && Number.isFinite(row.id)) ? row.id : i + 1;
+          return r;
+        });
+      } else if (d && typeof d === "object" && !Array.isArray(d)) out[k] = mergeObj(d, s);
+      else out[k] = coerce(d, s, k);
+    });
+    return out;
+  }
+
+  function normalizeState(raw) {
+    if (raw == null) return defaultState();
+    const out = mergeObj(defaultState(), raw);
+    if (!(raw && raw.cashflow && "executed" in raw.cashflow)) {
+      out.cashflow.executed = Math.max(0, out.cashflow.income - out.cashflow.expense);
+    }
+    Object.keys(out.quality).forEach(function (k) { if (QUALITY.indexOf(out.quality[k]) === -1) out.quality[k] = "declarada"; });
+    if (["nao", "sim"].indexOf(out.pro.cvm) === -1) out.pro.cvm = "nao";
+    if (STRATEGIES.indexOf(out.debtPlan.strategy) === -1) out.debtPlan.strategy = "avalanche";
+    if (MC_DISTS.indexOf(out.mc.dist) === -1) out.mc.dist = "normal";
+    if (MC_SCEN.indexOf(out.mc.scenario) === -1) out.mc.scenario = "atual";
+    out.mc.sims = Math.min(10000, Math.max(200, Math.round(out.mc.sims) || 2000));
+    out.mc.vol = Math.min(60, Math.max(0, out.mc.vol));
+    out.mc.seed = Math.max(1, Math.round(out.mc.seed) || 1);
+    if (REGIMES.indexOf(out.succ.regime) === -1) out.succ.regime = "comunhao_parcial";
+    out.succ.commonPct = Math.min(100, Math.max(0, out.succ.commonPct));
+    ["itcmd", "fees", "costs"].forEach(function (k) { out.succ[k] = Math.min(30, Math.max(0, out.succ[k])); });
+    out.succ.months = Math.min(120, Math.max(0, Math.round(out.succ.months)));
+    out.succ.heirs = Math.min(30, Math.max(0, Math.round(out.succ.heirs)));
+    out.succ.carry = Math.max(0, out.succ.carry);
+    if (!(raw && raw.protect)) Object.assign(out.protect, { deps: 0, supportYears: 10, survivorIncome: 0, needPct: 75, pension: 0, finalFixed: 0, estatePct: 0, transitionMonths: 6, existingLife: 0, disabPension: 0, careMonthly: 0, existingDisab: 0, usePct: 0 }); // estado antigo: não injeta números de exemplo
+    out.versions = sanitizeVersions(raw && raw.versions);
+    out.meta.version = 5;
+    return out;
+  }
+
+  function sanitizeVersions(list) {
+    if (!Array.isArray(list)) return [];
+    const res = [];
+    list.slice(0, MAX_VERSIONS).forEach(function (v, i) {
+      if (!v || typeof v !== "object" || !v.state || typeof v.state !== "object") return;
+      const inner = Object.assign({}, v.state); delete inner.versions;
+      res.push({
+        id: Number.isFinite(v.id) ? v.id : i + 1,
+        name: String(v.name == null ? "" : v.name).slice(0, 80) || "Versão",
+        note: String(v.note == null ? "" : v.note).slice(0, 400),
+        date: /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(String(v.date)) ? String(v.date) : "",
+        auto: !!v.auto,
+        state: normalizeState(inner)
+      });
+    });
+    return res;
+  }
+
+  /* ---------- taxas ---------- */
+  const annualToMonthly = (r) => Math.pow(1 + r, 1 / 12) - 1;
+  const realRate = (n, i) => (1 + n) / (1 + i) - 1;
+
+  function ratesOf(m) {
+    const r = m.rates;
+    const rnAcc = r.nominal / 100, iAcc = r.inflation / 100;
+    const rnPost = r.differentiate ? r.nominalPost / 100 : rnAcc;
+    const iPost = r.differentiate ? r.inflationPost / 100 : iAcc;
+    return { rnAcc, iAcc, rnPost, iPost, rrAcc: realRate(rnAcc, iAcc), rrPost: realRate(rnPost, iPost) };
+  }
+
+  const capacityOf = (m) => m.cashflow.income - m.cashflow.expense;
+
+  /* ---------- validação ---------- */
+  function validate(m) {
+    const e = [], w = [];
+    const p = m.profile, c = m.cashflow, a = m.assets, r = m.rates;
+    if (!(p.currentAge >= 18 && p.currentAge <= 100)) e.push("A idade atual deve estar entre 18 e 100 anos.");
+    if (!(p.retireAge > p.currentAge)) e.push("A aposentadoria precisa ser depois da idade atual.");
+    if (!(p.horizonAge > p.retireAge)) e.push("A expectativa de vida precisa ser depois da aposentadoria.");
+    if (p.horizonAge > 120) e.push("A expectativa de vida máxima aceita é 120 anos.");
+    const sane = (x) => x > -50 && x < 200;
+    if (!sane(r.nominal) || !sane(r.inflation)) e.push("Juros nominal ou inflação fora de uma faixa plausível (−50% a 200% a.a.).");
+    if (r.differentiate && (!sane(r.nominalPost) || !sane(r.inflationPost))) e.push("Taxas pós-aposentadoria fora de uma faixa plausível.");
+    if (a.liquid < 0 || a.illiquid < 0 || a.debts < 0) e.push("Patrimônio e dívidas não podem ser negativos — use o campo de dívidas para saldo devedor.");
+    if (e.length) return { errors: e, warnings: w };
+
+    const rt = ratesOf(m);
+    if (c.desiredWithdrawal <= 0) w.push("Defina o padrão de vida desejado (maior que zero) para calcular cobertura e aportes.");
+    if (rt.rrAcc <= 0) w.push("Retorno real ≤ 0 na fase de acumulação: os juros não compensam a inflação.");
+    if (rt.rrPost <= 0) w.push("Retorno real ≤ 0 após a aposentadoria: preservar o principal é inviável; consumir exige reserva muito maior.");
+    if (c.executed < 0) w.push("Aporte mensal negativo equivale a retirar dinheiro durante a acumulação.");
+    const cap = capacityOf(m);
+    if (c.executed > cap + 1) w.push("O aporte executado supera a capacidade de poupança (receita − despesa). Confirme a origem desse recurso.");
+    if (!c.escalate) w.push("Valores fixos em R$ nominais perdem poder de compra: o diagnóstico já considera isso e fica mais otimista do que a realidade se você pretende reajustar.");
+    if (m.phases && m.phases.on) {
+      if (!m.phaseRows.length) w.push("Gastos por fase ativados sem nenhuma fase cadastrada: o gasto desejado segue constante.");
+      m.phaseRows.forEach(function (row, i) { if (row.ageFrom < p.retireAge) w.push("Fase #" + (i + 1) + ": começa antes da aposentadoria e vale a partir da idade de aposentar."); if (row.pct > 150) w.push("Fase #" + (i + 1) + ": gasto acima de 150% do desejado, confirme."); });
+    }
+    if (m.retTax && m.retTax.on && !m.taxRows.length && m.retTax.manual == null) w.push("Tributação do resgate ativada sem estrutura informada: nenhum IR foi aplicado. Cadastre onde está o capital (PGBL, VGBL, tributável, isento) ou informe uma alíquota efetiva.");
+    m.extraMonthly.forEach(function (row, i) { if (!(row.ageTo > row.ageFrom)) w.push("Aporte/retirada mensal #" + (i + 1) + ": a idade final deve ser maior que a inicial (linha ignorada)."); });
+    m.extraAnnual.forEach(function (row, i) { if (row.age < p.currentAge && !(row.ageTo > p.currentAge)) w.push("Evento anual #" + (i + 1) + ": ocorre antes da idade atual e é ignorado."); });
+    return { errors: e, warnings: w };
+  }
+
+  /* ---------- tributação do resgate: o módulo fiscal informa a alíquota efetiva ---------- */
+  let taxProvider = null;
+  function setTaxProvider(fn) { taxProvider = typeof fn === "function" ? fn : null; }
+
+  /* ---------- simulação mensal em R$ de hoje ---------- */
+  function prep(m, shift, opts) {
+    const p = m.profile, rt = ratesOf(m), sh = shift || 0;
+    const N = Math.round((p.horizonAge - p.currentAge) * 12);
+    const n1 = Math.round((p.retireAge - p.currentAge) * 12);
+    const rrAcc = Math.max(-0.95, rt.rrAcc + sh), rrPost = Math.max(-0.95, rt.rrPost + sh);
+    const rAccM = annualToMonthly(rrAcc), rPostM = annualToMonthly(rrPost);
+    const iAccM = annualToMonthly(rt.iAcc), iPostM = annualToMonthly(rt.iPost);
+    const esc = !!m.cashflow.escalate;
+    const infl = new Float64Array(N + 1); infl[0] = 1;
+    for (let t = 0; t < N; t++) infl[t + 1] = infl[t] * (1 + (t < n1 ? iAccM : iPostM));
+
+    const idx = (age) => Math.round((age - p.currentAge) * 12);
+    const phRows = m.phases && m.phases.on ? m.phaseRows.filter(function (r) { return r.pct >= 0; }).slice().sort(function (a, b) { return a.ageFrom - b.ageFrom; }) : [];
+    const phaseAt = function (age) { let pct = 100, health = 0; for (const r of phRows) if (age + 1e-9 >= r.ageFrom) { pct = r.pct; health = r.health; } return { pct: pct, health: health }; };
+    const tau = Math.min(0.6, Math.max(0, m.retTax && m.retTax.on && taxProvider ? Number(taxProvider(m)) || 0 : 0));
+    const base = new Float64Array(N), xf = new Float64Array(N), sf = new Float64Array(N), rM = new Float64Array(N);
+    for (let t = 0; t < N; t++) {
+      const acc = t < n1;
+      const unit = esc ? 1 : 1 / infl[t + 1];
+      let f = acc ? m.cashflow.executed : 0;
+      for (const row of m.extraMonthly) {
+        if (row.ageTo > row.ageFrom && t >= idx(row.ageFrom) && t < idx(row.ageTo)) f += row.value;
+      }
+      for (const row of m.extraAnnual) {
+        const t0 = idx(row.age);
+        if (row.ageTo != null && row.ageTo > row.age) {
+          if (t >= t0 && t < idx(row.ageTo) && (t - t0) % 12 === 0) f += row.value;
+        } else if (t === t0) f += row.value;
+      }
+      base[t] = f * unit;
+      for (const row of m.retIncome) if (t >= idx(row.ageFrom)) base[t] += row.value;
+      xf[t] = acc ? unit : 0;
+      sf[t] = acc ? 0 : unit;
+      if (!acc && phRows.length) { const ph = phaseAt(p.currentAge + t / 12); sf[t] = unit * ph.pct / 100; base[t] -= ph.health * unit; }
+      rM[t] = acc ? rAccM : rPostM;
+    }
+    return { N, n1, infl, base, xf, sf, rM, tau, liquid0: m.assets.liquid, cur: p.currentAge, rrAcc, rrPost, shock: (opts && opts.shock) || 0 };
+  }
+
+  function sim(P, o) {
+    o = o || {};
+    let bal = P.liquid0 + (o.L || 0);
+    const X = o.X || 0, S = o.S || 0;
+    let ret = bal;
+    const yearly = o.path || o.ledger ? [{ age: P.cur, bal }] : null;
+    const rows = o.ledger ? [] : null;
+    let pos = 0, neg = 0, startBal = bal;
+    for (let t = 0; t < P.N; t++) {
+      if (t === P.n1) { ret = bal; if (P.shock) bal *= 1 - P.shock; }
+      let cf = P.base[t] + X * P.xf[t] - S * P.sf[t];
+      if (P.tau && t >= P.n1 && cf < 0) cf /= 1 - P.tau; // saque da carteira tributado: sai o líquido + o IR
+      bal = bal * (1 + P.rM[t]) + cf;
+      if (o.ledger) {
+        const nom = cf * P.infl[t + 1];
+        if (nom >= 0) pos += nom; else neg -= nom;
+      }
+      if (yearly && (t + 1) % 12 === 0) {
+        yearly.push({ age: P.cur + (t + 1) / 12, bal });
+        if (o.ledger) {
+          const infEnd = P.infl[t + 1];
+          rows.push({ age: P.cur + (t + 1) / 12, startNom: startBal * P.infl[t + 1 - 12], inflow: pos, outflow: neg, endNom: bal * infEnd, endReal: bal });
+          pos = 0; neg = 0; startBal = bal;
+        }
+      }
+    }
+    return { ret, term: bal, yearly, rows };
+  }
+
+  // Com IR no resgate o saldo final deixa de ser linear em S (só o saque líquido é tributado): bisseção, pois é monótono em S.
+  function solveSpend(P, target) {
+    const f = function (S) { return sim(P, { S: S }).term - target; };
+    if (f(0) <= 0) return 0;
+    let lo = 0, hi = 1, guard = 0;
+    while (f(hi) > 0 && guard++ < 60) { lo = hi; hi *= 2; }
+    if (f(hi) > 0) return 0;
+    for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+
+  /* ---------- análise: estratégias, cobertura, legado (linear → solução exata; com IR no resgate, bisseção) ---------- */
+  function analyze(m, shift, opts) {
+    const P = prep(m, shift, opts);
+    const D = m.cashflow.desiredWithdrawal;
+    const minLeg = Math.max(0, m.cashflow.minLegacy);
+    const s0 = sim(P, { S: D }), sX = sim(P, { X: 1, S: D }), sL = sim(P, { L: 1, S: D });
+    const sZ = sim(P, { S: 0 }), sU = sim(P, { S: 1 });
+    const aT = s0.term, aR = s0.ret;
+    const bT = sX.term - aT, bR = sX.ret - aR, cT = sL.term - aT, cR = sL.ret - aR;
+    const k = sZ.term - sU.term;
+    const G = bR > 1e-12 ? bT / bR : 1; // fator de crescimento da reserva na aposentadoria até o horizonte
+
+    const needC = minLeg - aT;
+    const XC = needC > 0 ? (bT > 1e-12 ? needC / bT : Infinity) : 0;
+    const LC = needC > 0 ? (cT > 1e-12 ? needC / cT : Infinity) : 0;
+    const gapC = needC > 0 ? (isFinite(XC) ? XC * bR : Infinity) : 0;
+    const surplusC = needC < 0 ? -needC / G : 0;
+
+    const g0 = aT - aR, slopeX = bT - bR, slopeL = cT - cR;
+    let XP = 0, LP = 0, gapP = 0, surplusP = 0;
+    if (g0 >= 0) { surplusP = slopeX > 1e-12 ? g0 / (slopeX / bR) : 0; }
+    else if (slopeX > 1e-9 && slopeL > 1e-9) { XP = -g0 / slopeX; LP = -g0 / slopeL; gapP = XP * bR; }
+    else { XP = Infinity; LP = Infinity; gapP = Infinity; }
+
+    const Scons = P.tau > 0 ? solveSpend(P, minLeg) : (k > 1e-12 ? Math.max(0, (sZ.term - minLeg) / k) : 0);
+    const Spres = P.tau > 0 ? solveSpend(P, aR) : (k > 1e-12 ? Math.max(0, (sZ.term - aR) / k) : 0);
+    const rt = ratesOf(m);
+    return {
+      P, D, minLeg, rrAcc: P.rrAcc, rrPost: P.rrPost, realBase: rt,
+      reserveNow: aR, termNow: aT,
+      consume: {
+        X: XC, L: LC, gap: gapC, surplus: surplusC,
+        reserve: isFinite(XC) ? aR + XC * bR : Infinity,
+        term: isFinite(XC) ? aT + XC * bT : Infinity,
+        maxSpend: Scons, coverage: D > 0 ? Scons / D : null
+      },
+      preserve: {
+        X: XP, L: LP, gap: gapP, surplus: surplusP,
+        reserve: isFinite(XP) ? aR + XP * bR : Infinity,
+        term: isFinite(XP) ? aT + XP * bT : Infinity,
+        maxSpend: Spres, coverage: D > 0 ? Spres / D : null
+      }
+    };
+  }
+
+  function paths(m, an) {
+    const P = an.P, D = an.D;
+    const cur = sim(P, { S: D, path: true }).yearly;
+    const fin = (x) => (isFinite(x) ? x : 0);
+    return {
+      current: cur,
+      consume: sim(P, { X: fin(an.consume.X), S: D, path: true }).yearly,
+      preserve: sim(P, { X: fin(an.preserve.X), S: D, path: true }).yearly
+    };
+  }
+
+  function ledger(m, an, X, year0) {
+    const r = sim(an.P, { X: isFinite(X) ? X : 0, S: an.D, ledger: true });
+    return r.rows.map(function (row, i) {
+      return Object.assign({ year: year0 + i + 1, isRetireYear: Math.abs(row.age - m.profile.retireAge) < 1e-9 }, row);
+    });
+  }
+
+  // Gasto desejado, renda e saque líquido ano a ano na aposentadoria (R$ de hoje), considerando as fases.
+  function spendingProfile(m) {
+    const p = m.profile, D = m.cashflow.desiredWithdrawal, rows = [];
+    const ph = m.phases && m.phases.on ? m.phaseRows.filter(function (r) { return r.pct >= 0; }).slice().sort(function (a, b) { return a.ageFrom - b.ageFrom; }) : [];
+    for (let age = p.retireAge; age < p.horizonAge; age++) {
+      let pct = 100, health = 0;
+      ph.forEach(function (r) { if (age >= r.ageFrom) { pct = r.pct; health = r.health; } });
+      const spend = D * pct / 100 + health;
+      const income = m.retIncome.reduce(function (t, r) { return t + (age >= r.ageFrom ? r.value : 0); }, 0);
+      rows.push({ age: age, pct: pct, health: health, spend: spend, income: income, draw: Math.max(0, spend - income) });
+    }
+    return rows;
+  }
+
+  /* ---------- Monte Carlo: cenários simulados, nunca probabilidade de sucesso ----------
+     Retornos reais mensais independentes: média = retorno das premissas, desvio = vol/√12 (normal ou t de Student com 4 g.l.,
+     reescalada para a mesma variância). Gastos, fases e IR vêm do mesmo motor determinístico. Semente fixa → resultado repetível. */
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function makeNormal(rng) {
+    let spare = null;
+    return function () {
+      if (spare !== null) { const v = spare; spare = null; return v; }
+      let u = 0; while (u === 0) u = rng();
+      const v = rng(), r = Math.sqrt(-2 * Math.log(u)), th = 2 * Math.PI * v;
+      spare = r * Math.sin(th); return r * Math.cos(th);
+    };
+  }
+  function quantile(sorted, q) {
+    const pos = (sorted.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+  }
+  const MC_Q = { p10: 0.10, p25: 0.25, p50: 0.50, p75: 0.75, p90: 0.90 };
+
+  function monteCarlo(m, opts) {
+    opts = opts || {};
+    const sims = Math.min(10000, Math.max(100, Math.round(opts.sims || 2000))), vol = Math.max(0, opts.vol == null ? 10 : opts.vol) / 100;
+    const dist = opts.dist === "tstudent" ? "tstudent" : "normal", seed = Math.max(1, Math.round(opts.seed || 1)), X = opts.X || 0;
+    const P = prep(m, 0, { shock: opts.shock || 0 }), D = m.cashflow.desiredWithdrawal;
+    const norm = makeNormal(mulberry32(seed)), s = vol / Math.sqrt(12), tScale = Math.sqrt(0.5); // var(t₄) = 2
+    // t de Student (4 g.l.): Z / sqrt(χ²₄ / 4), reescalada para variância 1
+    const draw = dist === "tstudent"
+      ? function () { const a = norm(), c1 = norm(), c2 = norm(), c3 = norm(), c4 = norm(); return (a / Math.sqrt((c1 * c1 + c2 * c2 + c3 * c3 + c4 * c4) / 4)) * tScale; }
+      : norm;
+    const nY = Math.floor(P.N / 12), cols = nY + 1, grid = new Float64Array(sims * cols), sum = new Float64Array(cols);
+    for (let k = 0; k < sims; k++) {
+      let bal = P.liquid0; const base = k * cols; grid[base] = bal; sum[0] += bal;
+      for (let t = 0; t < P.N; t++) {
+        if (t === P.n1 && P.shock) bal *= 1 - P.shock;
+        let r = P.rM[t] + (s > 0 ? s * draw() : 0); if (r < -0.95) r = -0.95;
+        let cf = P.base[t] + X * P.xf[t] - D * P.sf[t];
+        if (P.tau && t >= P.n1 && cf < 0) cf /= 1 - P.tau;
+        bal = bal * (1 + r) + cf;
+        if ((t + 1) % 12 === 0) { const y = (t + 1) / 12; grid[base + y] = bal; sum[y] += bal; }
+      }
+    }
+    const ages = [], bands = { p10: [], p25: [], p50: [], p75: [], p90: [] }, mean = [], col = new Float64Array(sims);
+    for (let y = 0; y < cols; y++) {
+      ages.push(P.cur + y);
+      for (let k = 0; k < sims; k++) col[k] = grid[k * cols + y];
+      const sorted = Array.prototype.slice.call(col).sort(function (a, b) { return a - b; });
+      Object.keys(MC_Q).forEach(function (key) { bands[key].push(quantile(sorted, MC_Q[key])); });
+      mean.push(sum[y] / sims);
+    }
+    const det = sim(P, { X: X, S: D, path: true }).yearly.map(function (pt) { return pt.bal; });
+    const ex = function (arr) { for (let i = 0; i < arr.length; i++) if (arr[i] < -0.5) return ages[i]; return null; };
+    return {
+      sims: sims, vol: vol * 100, dist: dist, seed: seed, ages: ages, bands: bands, mean: mean, det: det, retireAge: m.profile.retireAge, horizonAge: m.profile.horizonAge,
+      exhaust: { p10: ex(bands.p10), p25: ex(bands.p25), p50: ex(bands.p50), det: ex(det) },
+      terminal: { p10: bands.p10[cols - 1], p25: bands.p25[cols - 1], p50: bands.p50[cols - 1], p75: bands.p75[cols - 1], p90: bands.p90[cols - 1], mean: mean[cols - 1], det: det[cols - 1] }
+    };
+  }
+
+  // Aproximação racional de Acklam para a inversa da normal padrão.
+  function invNorm(p) {
+    const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+    const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+    const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+    const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+    const pl = 0.02425; let q, r;
+    if (p < pl) { q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+    if (p > 1 - pl) { q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+    q = p - 0.5; r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+
+  /* Ordem dos retornos: o MESMO conjunto de retornos anuais na aposentadoria. Só mudam de lugar os k melhores e os k piores anos
+     (k = 5): ou os piores vêm primeiro e os melhores por último, ou o contrário; os demais anos ficam na mesma ordem nas duas versões. */
+  function sequenceDemo(m, opts) {
+    opts = opts || {};
+    const vol = Math.max(0, opts.vol == null ? 10 : opts.vol) / 100, X = opts.X || 0;
+    const P = prep(m, 0, {}), D = m.cashflow.desiredWithdrawal, nRet = Math.max(1, Math.round(m.profile.horizonAge - m.profile.retireAge));
+    const zs = []; for (let i = 0; i < nRet; i++) zs.push(invNorm((i + 0.5) / nRet));
+    const mu = zs.reduce(function (t, x) { return t + x; }, 0) / nRet, sd = Math.sqrt(zs.reduce(function (t, x) { return t + (x - mu) * (x - mu); }, 0) / nRet) || 1;
+    const zn = zs.map(function (x) { return (x - mu) / sd; });                     // ascendente, média 0, desvio 1
+    const k = Math.max(1, Math.min(5, Math.floor(nRet / 4)));
+    const worst = zn.slice(0, k), best = zn.slice(nRet - k).reverse(), mid = zn.slice(k, nRet - k), mix = [];
+    for (let i = 0, j = mid.length - 1; i <= j;) { mix.push(mid[i++]); if (i <= j) mix.push(mid[j--]); }
+    const badStart = worst.concat(mix, best.slice().reverse()), goodStart = best.concat(mix, worst.slice().reverse());
+    const run = function (order) {
+      const rM = Float64Array.from(P.rM);
+      for (let t = P.n1; t < P.N; t++) {
+        const yi = Math.min(nRet - 1, Math.floor((t - P.n1) / 12));
+        rM[t] = annualToMonthly(Math.max(-0.9, P.rrPost + vol * order[yi]));
+      }
+      const r = sim(Object.assign({}, P, { rM: rM }), { X: X, S: D, path: true });
+      return { term: r.term, yearly: r.yearly, exhaust: exhaustAge(r.yearly) };
+    };
+    const flat = sim(P, { X: X, S: D, path: true });
+    return {
+      bad: run(badStart), good: run(goodStart), flat: { term: flat.term, yearly: flat.yearly, exhaust: exhaustAge(flat.yearly) },
+      orders: { bad: badStart, good: goodStart }, years: nRet, window: k, vol: vol * 100, worst: Math.max(-0.9, P.rrPost + vol * zn[0]), best: P.rrPost + vol * zn[nRet - 1]
+    };
+  }
+
+  function exhaustAge(yearly) {
+    for (const pt of yearly) if (pt.bal < -0.5) return pt.age;
+    return null;
+  }
+
+  function stress(m, p) {
+    const m2 = JSON.parse(JSON.stringify(m));
+    m2.cashflow.executed *= 1 + p.dAporte / 100;
+    m2.cashflow.desiredWithdrawal *= 1 + p.dGasto / 100;
+    m2.profile.horizonAge += p.dHor;
+    if (p.custo > 0) m2.extraAnnual.push({ id: 9999, age: p.custoIdade, ageTo: null, value: -p.custo, label: "estresse" });
+    const an = analyze(m2, p.dRet / 100, { shock: p.shock / 100 });
+    const yearly = sim(an.P, { S: an.D, path: true }).yearly;
+    const cov = an.consume.coverage;
+    return { coverage: cov, X: an.consume.X, exhaustAge: exhaustAge(yearly), cut: cov == null ? null : Math.max(0, 1 - cov), horizon: m2.profile.horizonAge };
+  }
+
+  const SENS_SHIFTS = [
+    { key: "fav", label: "Favorável", pp: 1 },
+    { key: "base", label: "Base", pp: 0 },
+    { key: "cons", label: "Conservador", pp: -1 },
+    { key: "def", label: "Defensivo", pp: -2 },
+    { key: "stress", label: "Estresse", pp: -3 }
+  ];
+  function sensitivity(m) {
+    return SENS_SHIFTS.map(function (s) {
+      const an = analyze(m, s.pp / 100);
+      return { key: s.key, label: s.label, pp: s.pp, rrAcc: an.rrAcc, rrPost: an.rrPost, an };
+    });
+  }
+
+  return { setTaxProvider, spendingProfile, monteCarlo, sequenceDemo, invNorm, MAX_VERSIONS, parseLocaleNumber, defaultState, normalizeState, validate, capacityOf, ratesOf, analyze, paths, ledger, sensitivity, stress, exhaustAge, SENS_SHIFTS, annualToMonthly, realRate, ROW_SCHEMAS, ENUMS, QUALITY };
+})();
+if (typeof module !== "undefined") module.exports = Engine;
+/* ENGINE:END */
+
+/* IRPF:BEGIN — puro, sem DOM. Tabelas isoladas por vigência para facilitar atualização. */
+const Irpf = (function () {
+  "use strict";
+
+  const TAX = {
+    "2026": {
+      label: "2026 em diante — Lei 15.270/2025",
+      short: "2026 em diante",
+      source: "Lei 15.270/2025 e tabelas divulgadas para 2026 (conferidas em fontes secundárias em 05/10/2026; validar na Receita Federal antes de uso com clientes).",
+      monthly: {
+        brackets: [[2428.80, 0, 0], [2826.65, 0.075, 182.16], [3751.05, 0.15, 394.16], [4664.68, 0.225, 675.49], [Infinity, 0.275, 908.73]],
+        dep: 189.59, simplified: 607.20,
+        reducer: { fullUntil: 5000, partialUntil: 7350, a: 978.62, b: 0.133145 }
+      },
+      annual: {
+        brackets: [[29145.60, 0, 0], [33919.80, 0.075, 2185.92], [45012.60, 0.15, 4729.91], [55976.16, 0.225, 8105.85], [Infinity, 0.275, 10904.66]],
+        dep: 2275.08, educationLimit: 3561.50, simplifiedRate: 0.20, simplifiedCap: 17640.00,
+        reducer: { cap: 2694.15, fullUntil: 60000, partialUntil: 88200, a: 8429.73, b: 0.095575 },
+        pgblRate: 0.12, minTaxFrom: 600000
+      }
+    },
+    "2025": {
+      label: "2025 — tabela anterior à Lei 15.270 (do arquivo original)",
+      short: "2025 (tabela anterior)",
+      source: "Tabela de jan–abr/2025 (base do arquivo original). Não vale para 2026.",
+      monthly: {
+        brackets: [[2259.20, 0, 0], [2826.65, 0.075, 169.44], [3751.05, 0.15, 381.44], [4664.68, 0.225, 662.77], [Infinity, 0.275, 904.48]],
+        dep: 189.59, simplified: 564.80, reducer: null
+      },
+      annual: {
+        brackets: [[27110.40, 0, 0], [33919.80, 0.075, 2033.28], [45012.60, 0.15, 4577.28], [55976.16, 0.225, 7953.24], [Infinity, 0.275, 10853.78]],
+        dep: 2275.08, educationLimit: 3561.50, simplifiedRate: 0.20, simplifiedCap: 16754.34,
+        reducer: null, pgblRate: 0.12, minTaxFrom: null
+      }
+    }
+  };
+
+  const pos = (x) => Math.max(0, x);
+
+  function tableTax(base, brackets) {
+    for (const [lim, rate, ded] of brackets) if (base <= lim) return pos(base * rate - ded);
+    return 0;
+  }
+
+  function monthlyReducer(rend, gross, R) {
+    if (!R) return 0;
+    if (rend <= R.fullUntil) return gross;
+    if (rend <= R.partialUntil) return Math.min(gross, pos(R.a - R.b * rend));
+    return 0;
+  }
+  function annualReducer(rend, gross, R) {
+    if (!R) return 0;
+    if (rend <= R.fullUntil) return Math.min(gross, R.cap);
+    if (rend <= R.partialUntil) return Math.min(gross, pos(R.a - R.b * rend));
+    return 0;
+  }
+
+  /* ---------- cálculo mensal (retenção / carnê-leão) ---------- */
+  function monthly(inp, vig) {
+    const T = TAX[vig].monthly;
+    const legal = inp.inss + inp.dep * T.dep + inp.pensao + inp.outras;
+    const mode = legal >= T.simplified ? "legal" : "simplificado";
+    const used = Math.max(legal, T.simplified);
+    const base = pos(inp.rend - used);
+    const gross = tableTax(base, T.brackets);
+    const red = monthlyReducer(inp.rend, gross, T.reducer);
+    const tax = pos(gross - red);
+    return { legal, used, mode, base, gross, red, tax, effective: inp.rend > 0 ? tax / inp.rend : 0, simplifiedValue: T.simplified };
+  }
+
+  /* ---------- ajuste anual: simplificado × completo × completo + PGBL ---------- */
+  function scenario(rend, ded, irrf, T) {
+    const base = pos(rend - ded);
+    const gross = tableTax(base, T.brackets);
+    const red = annualReducer(rend, gross, T.reducer);
+    const tax = pos(gross - red);
+    return { ded, base, gross, red, tax, result: irrf - tax };
+  }
+
+  function annual(inp, vig) {
+    const T = TAX[vig].annual;
+    const people = 1 + inp.dep;
+    const instrCap = people * T.educationLimit;
+    const instr = Math.min(inp.instr, instrCap);
+    const legal = inp.inss + inp.dep * T.dep + instr + inp.med + inp.outras;
+    const simplified = Math.min(inp.rend * T.simplifiedRate, T.simplifiedCap);
+    const pgblLimit = inp.rend * T.pgblRate;
+    const want = inp.aporte == null ? pgblLimit : inp.aporte;
+    const aporte = Math.min(pos(want), pgblLimit);
+    const S = scenario(inp.rend, simplified, inp.irrf, T);
+    const C = scenario(inp.rend, legal, inp.irrf, T);
+    const P = scenario(inp.rend, legal + aporte, inp.irrf, T);
+    const bestKey = S.tax < C.tax ? "S" : "C";
+    const best = bestKey === "S" ? S : C;
+    const saving = best.tax - P.tax;
+    return {
+      S, C, P, best, bestKey, aporte, pgblLimit, saving,
+      flags: {
+        aporteClamped: inp.aporte != null && inp.aporte > pgblLimit + 0.005,
+        instrCapped: inp.instr > instrCap + 0.005,
+        instrCap,
+        simplifiedBeatsPgbl: S.tax < P.tax - 0.005,
+        minTax: T.minTaxFrom != null && inp.rend > T.minTaxFrom
+      }
+    };
+  }
+
+  /* ---------- PGBL × investimento comum no longo prazo ---------- */
+  function pgblRate(years) { return years > 10 ? 0.10 : years > 8 ? 0.15 : years > 6 ? 0.20 : years > 4 ? 0.25 : years > 2 ? 0.30 : 0.35; }
+  function fixedIncomeRate(years) { return years <= 1 ? 0.175 : 0.15; }
+
+  function project(p) {
+    const aporte = p.renda * p.pct / 100;
+    const aliq = p.aliq / 100;
+    const econ = aporte * aliq;
+    const outOfPocket = aporte - econ;
+    const rP = p.cdi / 100 - p.taxa / 100, rA = p.cdi / 100;
+    const rows = [];
+    let balP = 0, balA = 0, breakEven = null;
+    for (let y = 1; y <= p.anos; y++) {
+      const jurosP = (balP + aporte) * rP;
+      balP = (balP + aporte) * (1 + rP);
+      balA = (balA + outOfPocket) * (1 + rA);
+      let netP = 0, netA = 0;
+      for (let k = 1; k <= y; k++) {
+        const held = y - k + 1;
+        netP += aporte * Math.pow(1 + rP, held) * (1 - pgblRate(held));
+        const fvA = outOfPocket * Math.pow(1 + rA, held);
+        netA += outOfPocket + (fvA - outOfPocket) * (1 - fixedIncomeRate(held));
+      }
+      if (breakEven === null && netP > netA) breakEven = y;
+      rows.push({ y, aporte, econ, jurosP, balP, netP, balA, netA, adv: netP - netA });
+    }
+    const last = rows[rows.length - 1];
+    return {
+      aporte, econ, outOfPocket, rows, last, breakEven,
+      totals: { aportado: aporte * p.anos, econ: econ * p.anos, outOfPocket: outOfPocket * p.anos },
+      irP: last.balP - last.netP, irA: last.balA - last.netA
+    };
+  }
+
+  /* ---------- tributação no resgate: alíquota efetiva sobre o capital de aposentadoria ----------
+     Regressiva: pelo tempo médio de aplicação (a regra real é por aporte; usar a média é uma simplificação).
+     Progressiva: tabela mensal sobre o saque bruto estimado de cada linha, sem o redutor da Lei 15.270 (estimativa).
+     PGBL: IR sobre o valor total; VGBL e investimento tributável: IR só sobre a parcela de ganho. */
+  const REGRESSIVE = [[2, 0.35], [4, 0.30], [6, 0.25], [8, 0.20], [10, 0.15], [Infinity, 0.10]];
+  function progressiveRate(monthlyBase, vig) {
+    const T = TAX[vig].monthly;
+    return monthlyBase > 0 ? tableTax(monthlyBase, T.brackets) / monthlyBase : 0;
+  }
+  function withdrawalTax(rows, vig, manualPct) {
+    if (manualPct != null && isFinite(manualPct)) return { tau: Math.max(0, manualPct) / 100, manual: true, parts: [], value: 0, tax: 0 };
+    const parts = []; let value = 0, tax = 0;
+    (rows || []).forEach(function (r) {
+      const v = Math.max(0, Number(r.value) || 0); if (v <= 0) return;
+      const gain = Math.min(1, Math.max(0, (Number(r.gainPct) || 0) / 100)), years = Math.max(0, Number(r.years) || 0);
+      let base = v, rate = 0, note = "";
+      if (r.kind === "isento") { base = 0; note = "isento"; }
+      else if (r.kind === "tributavel") { base = v * gain; rate = fixedIncomeRate(years); note = "ganho a " + (rate * 100).toFixed(1).replace(".", ",") + "%"; }
+      else {
+        base = r.kind === "vgbl" ? v * gain : v;
+        if (r.regime === "progressivo") { rate = progressiveRate(Math.max(0, Number(r.monthly) || 0) * (v > 0 ? base / v : 0), vig); note = "tabela progressiva (estimativa)"; }
+        else { rate = pgblRate(years); note = "regressiva, " + years + " anos"; }
+      }
+      const t = base * rate;
+      parts.push({ label: r.label || "Linha", kind: r.kind, value: v, base: base, rate: rate, tax: t, eff: t / v, note: note });
+      value += v; tax += t;
+    });
+    return { tau: value > 0 ? tax / value : 0, manual: false, parts: parts, value: value, tax: tax };
+  }
+
+  return { TAX, REGRESSIVE, tableTax, monthly, annual, project, pgblRate, fixedIncomeRate, progressiveRate, withdrawalTax };
+})();
+if (typeof module !== "undefined") module.exports = Irpf;
+/* IRPF:END */
+
+/* PLANNING:BEGIN — diagnóstico, indicadores, qualidade dos dados, sugestões e memorando. Puro, sem DOM. */
+const Planning = (function (E) {
+  "use strict";
+
+  const num = (x) => (isFinite(x) ? x : 0);
+  const sum = (arr, f) => arr.reduce((t, x) => t + num(f(x)), 0);
+  const FREQ = { mensal: 1, trimestral: 1 / 3, semestral: 1 / 6, anual: 1 / 12 };
+  const monthlyOf = (r) => num(r.value) * (FREQ[r.freq] || 1);
+  const brl = (v) => (isFinite(v) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(Math.round(v) + 0) : "—");
+  const pct = (v, d) => (isFinite(v) ? new Intl.NumberFormat("pt-BR", { maximumFractionDigits: d == null ? 0 : d }).format(v) + "%" : "—");
+
+  /* ---------- balanço patrimonial ---------- */
+  function balanco(s) {
+    const A = s.diag.bsAssets, L = s.diag.bsLiabilities;
+    const byLiq = { imediata: 0, curta: 0, longa: 0, iliquida: 0 };
+    const byPurpose = { reserva: 0, aposentadoria: 0, objetivos: 0, uso: 0, negocio: 0, outro: 0 };
+    A.forEach((a) => { byLiq[a.liq] += num(a.value); byPurpose[a.purpose] += num(a.value); });
+    const totalAssets = sum(A, (a) => a.value), totalLiab = sum(L, (l) => l.balance);
+    const serviceDebt = sum(L, (l) => l.payment);
+    const shortDebt = sum(L, (l) => num(l.payment) * Math.min(12, l.months > 0 ? l.months : 12));
+    const financial = totalAssets - byLiq.iliquida;
+    const retirementFin = sum(A, (a) => (a.purpose === "aposentadoria" && a.liq !== "iliquida" ? a.value : 0));
+    const biggestFin = A.filter((a) => a.liq !== "iliquida").reduce((m, a) => (num(a.value) > num(m.value) ? a : m), { value: 0, label: "" });
+    return {
+      totalAssets, totalLiab, net: totalAssets - totalLiab, financial, retirementFin, illiquid: byLiq.iliquida,
+      available: byLiq.imediata + byLiq.curta - shortDebt, shortDebt, serviceDebt, byLiq, byPurpose, biggestFin
+    };
+  }
+
+  /* ---------- fluxo de caixa normalizado ---------- */
+  function fluxo(s, bs) {
+    const rows = s.diag.flow;
+    const rec = (r) => r.nature !== "extraordinaria";
+    const incomeRec = sum(rows.filter((r) => r.kind === "receita" && rec(r)), monthlyOf);
+    const incomeExtra = sum(rows.filter((r) => r.kind === "receita" && !rec(r)), monthlyOf);
+    const exp = (c) => sum(rows.filter((r) => r.kind === "despesa" && rec(r) && r.control === c), monthlyOf);
+    const contractual = exp("contratual"), essential = exp("essencial"), discretionary = exp("discricionaria");
+    const expenseExtra = sum(rows.filter((r) => r.kind === "despesa" && !rec(r)), monthlyOf);
+    const debt = bs.serviceDebt;
+    const expenseTotal = contractual + essential + discretionary + debt;
+    const surplus = incomeRec - expenseTotal;
+    return {
+      incomeRec, incomeExtra, contractual, essential, discretionary, debt, expenseTotal, expenseExtra, surplus,
+      essentialMonthly: contractual + essential + debt,
+      rigidShare: incomeRec > 0 ? (contractual + debt) / incomeRec * 100 : null,
+      flexibleShare: incomeRec > 0 ? (essential + discretionary) / incomeRec * 100 : null,
+      adjustable: discretionary + essential
+    };
+  }
+
+  /* ---------- reserva de contingência dimensionada ---------- */
+  const RESERVE_ADD = { variable: 2, single: 2, dependents: 1, health: 1, lowEmploy: 1 };
+  const RESERVE_BASE = 3;
+  function reserva(s, fl, bs) {
+    const d = s.diag;
+    const computed = RESERVE_BASE + Object.keys(RESERVE_ADD).reduce((t, k) => t + (d.risk[k] ? RESERVE_ADD[k] : 0), 0);
+    const months = d.monthsOverride != null ? d.monthsOverride : computed;
+    const target = fl.essentialMonthly * months + num(d.shocks);
+    const have = bs.byLiq.imediata;
+    return { computedMonths: computed, months, target, have, gap: Math.max(0, target - have), surplus: Math.max(0, have - target), monthsHave: fl.essentialMonthly > 0 ? have / fl.essentialMonthly : null };
+  }
+
+  /* ---------- indicadores ---------- */
+  function statusOf(v, target, dir) {
+    if (v == null || !isFinite(v)) return "na";
+    const ok = dir === "min" ? v >= target : v <= target;
+    if (ok) return "ok";
+    const dev = dir === "min" ? (target - v) / Math.max(target, 1e-9) : (v - target) / Math.max(target, 1e-9);
+    return dev <= 0.25 ? "warn" : "crit";
+  }
+
+  function indicadores(s, bs, fl, rs, an) {
+    const t = s.diag.targets, ex = s.cashflow.executed, inc = fl.incomeRec;
+    const need = an && isFinite(an.consume.X) ? ex + an.consume.X : null;
+    const list = [
+      { key: "liquidez", label: "Meses de liquidez", value: rs.monthsHave, unit: "meses", dec: 1, target: rs.months, dir: "min", formula: "Ativos de liquidez imediata ÷ despesas essenciais mensais", read: "Mede por quanto tempo a família sustenta o essencial sem vender ativos nem se endividar. A meta sobe com renda variável, único provedor, dependentes e saúde." },
+      { key: "poupanca", label: "Taxa de aporte", value: inc > 0 ? ex / inc * 100 : null, unit: "%", dec: 1, target: t.savings, dir: "min", formula: "Aporte mensal realizado ÷ renda líquida recorrente", read: "Capacidade de poupança é o superávit do fluxo; aporte é o que de fato é investido. A diferença entre os dois é o primeiro ponto de conversa." },
+      { key: "dividas", label: "Comprometimento com dívidas", value: inc > 0 ? fl.debt / inc * 100 : null, unit: "%", dec: 1, target: t.debtLoad, dir: "max", formula: "Prestações mensais ÷ renda líquida recorrente", read: "Rigidez do orçamento. Acima da faixa, qualquer queda de renda vira inadimplência antes de virar ajuste." },
+      { key: "alavancagem", label: "Alavancagem patrimonial", value: bs.totalAssets > 0 ? bs.totalLiab / bs.totalAssets * 100 : null, unit: "%", dec: 1, target: t.leverage, dir: "max", formula: "Passivos totais ÷ ativos totais", read: "Dependência de capital de terceiros. Olhe junto com a liquidez e o custo da dívida." },
+      { key: "solvencia", label: "Solvência", value: bs.totalAssets > 0 ? bs.net / bs.totalAssets * 100 : null, unit: "%", dec: 1, target: t.solvency, dir: "min", formula: "Patrimônio líquido ÷ ativos totais", read: "Quanto dos ativos é, de fato, da família. Deve crescer ao longo do tempo." },
+      { key: "meta", label: "Aporte sobre a meta (aposentadoria)", value: need != null && need > 0 ? ex / need * 100 : null, unit: "%", dec: 0, target: 100, dir: "min", formula: "Aporte atual ÷ (aporte atual + aporte adicional para consumir a reserva)", read: "Distância até o aporte que fecha o objetivo nas premissas atuais. Muda com o retorno real: veja a sensibilidade." },
+      { key: "concentracao", label: "Concentração", value: bs.financial > 0 ? num(bs.biggestFin.value) / bs.financial * 100 : null, unit: "%", dec: 1, target: t.concentration, dir: "max", formula: "Maior linha financeira ÷ patrimônio financeiro", read: "Só faz sentido se as posições estiverem listadas por emissor ou produto, e não por classe.", detail: bs.biggestFin.label }
+    ];
+    list.forEach((i) => { i.status = statusOf(i.value, i.target, i.dir); });
+    return list;
+  }
+
+  /* ---------- qualidade dos dados ---------- */
+  const CRITICAL = [["liquid", "Recursos financeiros"], ["illiquid", "Patrimônio imobilizado"], ["debts", "Dívidas"], ["income", "Receita mensal"], ["expense", "Despesa mensal"], ["executed", "Aporte realizado"], ["desired", "Padrão de vida desejado"], ["rates", "Retorno e inflação"]];
+  function quality(s) {
+    const items = CRITICAL.map(([k, label]) => ({ label, q: s.quality[k] }));
+    const rows = []
+      .concat(s.diag.bsAssets.map((r) => ({ label: r.label || "Ativo", q: r.quality })))
+      .concat(s.diag.bsLiabilities.map((r) => ({ label: r.label || "Dívida", q: r.quality })))
+      .concat(s.diag.flow.map((r) => ({ label: r.label || "Item de fluxo", q: r.quality })));
+    const count = (arr, q) => arr.filter((x) => x.q === q).length;
+    const pctConf = (arr) => (arr.length ? count(arr, "confirmada") / arr.length * 100 : null);
+    return {
+      critical: { total: items.length, confirmed: count(items, "confirmada"), pct: pctConf(items), estimated: items.filter((x) => x.q === "estimada").map((x) => x.label), pending: items.filter((x) => x.q === "pendente").map((x) => x.label) },
+      rows: { total: rows.length, confirmed: count(rows, "confirmada"), pct: pctConf(rows), estimated: rows.filter((x) => x.q === "estimada").map((x) => x.label), pending: rows.filter((x) => x.q === "pendente").map((x) => x.label) }
+    };
+  }
+
+  /* ---------- sincronização Diagnóstico → Aposentadoria ---------- */
+  function syncPatch(s) {
+    const bs = balanco(s), fl = fluxo(s, bs);
+    return { liquid: bs.retirementFin, illiquid: bs.illiquid, debts: bs.totalLiab, income: fl.incomeRec, expense: fl.expenseTotal };
+  }
+
+  /* ---------- sugestões de ação (apenas planejamento; sem produtos) ---------- */
+  function suggestions(s, ctx) {
+    const { an, bs, fl, rs, ind, stress, quality: q } = ctx;
+    const out = [];
+    const add = (key, title, priority, owner, evidence, next) => out.push({ key, title, priority, owner, evidence, next });
+    if (rs.gap > 0 && fl.essentialMonthly > 0) {
+      add("reserva", "Completar a reserva de contingência", rs.have < rs.target * 0.5 ? "critica" : "alta", "cliente",
+        "Liquidez imediata " + brl(rs.have) + " (" + (rs.monthsHave == null ? "—" : rs.monthsHave.toFixed(1).replace(".", ",")) + " meses) para um alvo de " + brl(rs.target) + " (" + String(rs.months).replace(".", ",") + " meses). Faltam " + brl(rs.gap) + ".",
+        "Definir uma transferência automática mensal e a conta onde a reserva ficará separada.");
+    }
+    const exp = s.diag.bsLiabilities.filter((l) => l.cet >= s.rates.nominal && l.balance > 0);
+    if (exp.length) {
+      add("divida_cara", "Avaliar amortização ou portabilidade de dívida com custo acima do retorno esperado", "alta", "planejador",
+        exp.map((l) => (l.label || "Dívida") + ": CET " + pct(l.cet, 1) + " a.a. contra retorno nominal de " + pct(s.rates.nominal, 1)).join("; ") + ".",
+        "Levantar saldo devedor, multas e possibilidade de portabilidade; comparar com o retorno líquido e a liquidez perdida.");
+    }
+    if (an && an.consume.coverage != null && an.consume.coverage < 1) {
+      const X = an.consume.X, cut = Math.max(0, 1 - an.consume.coverage);
+      add("aposentadoria_lacuna", "Fechar a lacuna do objetivo de aposentadoria", an.consume.coverage < 0.7 ? "critica" : "alta", "planejador",
+        "Cobertura de " + pct(an.consume.coverage * 100) + " da renda desejada. Para fechar: aporte adicional de " + (isFinite(X) ? brl(X) + "/mês" : "inviável") + ", ou redução do padrão de vida em " + pct(cut * 100) + ", ou adiamento da aposentadoria.",
+        "Apresentar as alternativas ao cliente, registrar a escolhida em um memorando e revisar em 12 meses.");
+    }
+    if (s.cashflow.executed > E.capacityOf(s) + 1) {
+      add("aporte_origem", "Confirmar a origem do aporte acima da capacidade de poupança", "media", "planejador",
+        "Aporte informado " + brl(s.cashflow.executed) + " contra capacidade de " + brl(E.capacityOf(s)) + " (receita − despesa informadas).", "Reconciliar com extratos e ajustar receita, despesa ou aporte.");
+    }
+    if (q && (q.critical.pending.length || q.rows.pending.length)) {
+      const names = q.critical.pending.concat(q.rows.pending);
+      add("dados_pendentes", "Confirmar dados pendentes", "alta", "cliente", "Pendentes: " + names.slice(0, 6).join(", ") + (names.length > 6 ? " e mais " + (names.length - 6) : "") + ".", "Solicitar os documentos correspondentes e atualizar o rótulo de qualidade de cada dado.");
+    }
+    const conc = ind.find((i) => i.key === "concentracao");
+    if (conc && conc.status !== "ok" && conc.status !== "na") {
+      add("concentracao", "Revisar a concentração patrimonial", "media", "planejador", "Maior linha financeira (" + (conc.detail || "—") + ") representa " + pct(conc.value, 1) + " do patrimônio financeiro; faixa de atenção " + pct(conc.target) + ".", "Confirmar se a posição é intencional e qual o papel dela no objetivo que financia.");
+    }
+    if (stress && stress.crise && stress.crise.coverage != null && stress.crise.coverage < 0.8) {
+      add("guardrails", "Definir regra de gasto flexível para o início da aposentadoria", "media", "planejador", "No estresse de crise inicial a cobertura cai para " + pct(stress.crise.coverage * 100) + ".", "Combinar com o cliente quais gastos podem ser reduzidos, em que gatilho e em quanto.");
+    }
+    const gl = ctx.goals;
+    if (gl && gl.ranked.length && gl.totals.gap > 0.5) {
+      const essentialOpen = gl.ranked.some((r) => r.priority === "essencial" && (r.status === "sem_recursos" || r.status === "parcial" || r.status === "vencida"));
+      add("metas_lacuna", "Fechar a conta das metas de vida", essentialOpen ? "alta" : "media", "planejador",
+        "As metas pedem " + brl(gl.totals.required) + "/mês e há " + brl(gl.totals.available) + "/mês livres depois do aporte da aposentadoria (superávit " + brl(gl.totals.surplus) + "). Faltam " + brl(gl.totals.gap) + "/mês.",
+        "Decidir com o cliente o que muda: datas, valores, prioridade ou parte do aporte da aposentadoria (veja o efeito na cobertura na aba Objetivos).");
+    }
+    const pr = ctx.protection;
+    if (pr && pr.hasDependents && pr.death.need > 0 && pr.death.gap > 0 && pr.death.status !== "ok") {
+      add("protecao_lacuna", "Tratar a lacuna de proteção da família", pr.death.status === "crit" ? "alta" : "media", "planejador",
+        "Em caso de morte, o capital estimado como necessário é " + brl(pr.death.need) + " e os recursos disponíveis somam " + brl(pr.death.resources) + ": lacuna de " + brl(pr.death.gap) + (pr.disability.gap > 0 ? ". Em caso de invalidez, a lacuna é de " + brl(pr.disability.gap) : "") + ".",
+        "Validar as premissas (renda do cônjuge, anos de sustento, custos) e, se o cliente decidir cobrir a lacuna, encaminhar a análise a um corretor de seguros habilitado.");
+    }
+    const sc = ctx.succession;
+    if (sc && sc.monte > 0 && sc.gap > 0) {
+      add("liquidez_sucessao", "Prever o caixa para o inventário da família", sc.gap > sc.total * 0.5 ? "alta" : "media", "planejador",
+        "Custos estimados do inventário: " + brl(sc.total) + " (" + pct(sc.totalPct, 1) + " do patrimônio líquido), contra " + brl(sc.liquidOutside) + " de liquidez fora do inventário. Lacuna de caixa imediato: " + brl(sc.gap) + ".",
+        "Confirmar com um advogado o regime de bens, a alíquota do ITCMD no estado e o tipo de inventário, e decidir com o cliente como esse caixa será formado.");
+    }
+    if (ctx.tauEst != null && ctx.tauEst > 0 && !(s.retTax && s.retTax.on)) {
+      add("tributacao_resgate", "Considerar o IR do resgate na projeção da aposentadoria", "media", "planejador",
+        "Pela estrutura cadastrada, o IR efetivo estimado sobre os saques seria de " + pct(ctx.tauEst * 100, 1) + ", e a projeção atual não o considera.",
+        "Ativar a tributação do resgate na aba Aposentadoria e comparar o padrão de vida líquido com o atual.");
+    }
+    return out;
+  }
+
+  /* ---------- rascunho de memorando: aposentadoria ---------- */
+  function draftRetirementMemo(s) {
+    const an = E.analyze(s, 0), p = s.profile;
+    const pa = E.paths(s, an), ex = E.exhaustAge(pa.current);
+    const sens = E.sensitivity(s), def = sens.find((x) => x.key === "def").an;
+    const alts = [];
+    const c = an.consume;
+    alts.push("A) Aumentar o aporte em " + (isFinite(c.X) ? brl(c.X) + "/mês" : "valor inviável") + " ou fazer um aporte único de " + (isFinite(c.L) ? brl(c.L) : "valor inviável") + " hoje (estratégia consumir a reserva até os " + p.horizonAge + " anos).");
+    alts.push("B) Reduzir o padrão de vida desejado de " + brl(an.D) + " para " + brl(c.maxSpend) + "/mês (corte de " + pct(Math.max(0, 1 - (c.coverage || 0)) * 100) + ").");
+    if (p.retireAge + 2 < p.horizonAge) {
+      const d2 = JSON.parse(JSON.stringify(s)); d2.profile.retireAge += 2;
+      const a2 = E.analyze(d2, 0);
+      alts.push("C) Adiar a aposentadoria em 2 anos (para " + d2.profile.retireAge + "): cobertura passa a " + pct((a2.consume.coverage || 0) * 100) + " e o aporte adicional necessário, a " + (isFinite(a2.consume.X) ? brl(a2.consume.X) + "/mês" : "inviável") + ".");
+    }
+    alts.push("D) Manter o plano atual, sem novos aportes.");
+    const cov = c.coverage;
+    return {
+      title: "Aposentadoria: como fechar a lacuna entre o padrão de vida desejado e o sustentável",
+      frame: "planejamento",
+      problem: "O padrão de vida desejado de " + brl(an.D) + "/mês (R$ de hoje) a partir dos " + p.retireAge + " anos " + (cov != null && cov < 1 ? "não é totalmente sustentável" : "é sustentável") + " com os aportes atuais de " + brl(s.cashflow.executed) + "/mês.",
+      evidence: "Cobertura da renda desejada: " + pct((cov || 0) * 100) + " (consumir) e " + pct((an.preserve.coverage || 0) * 100) + " (preservar). Reserva projetada aos " + p.retireAge + " anos: " + brl(an.reserveNow) + " (R$ de hoje). Padrão de vida máximo sustentável: " + brl(c.maxSpend) + "/mês.",
+      alternatives: alts.join("\n"),
+      chosen: "[Preencher: alternativa escolhida e por quê]",
+      assumptions: "Retorno real " + pct(an.rrAcc * 100, 2) + " a.a. (acumulação) e " + pct(an.rrPost * 100, 2) + " a.a. (aposentadoria); inflação " + pct(s.rates.inflation, 1) + "; horizonte de " + p.horizonAge + " anos; taxa constante; " + (an.P.tau > 0 ? "IR médio de " + pct(an.P.tau * 100, 1) + " sobre os saques da carteira" : "sem tributação sobre resgates") + (s.phases && s.phases.on ? "; gasto por fases (" + s.phaseRows.length + " fase(s) cadastrada(s))" : "") + ". Sensibilidade: no cenário defensivo (−2 p.p.) o aporte adicional vai a " + (isFinite(def.consume.X) ? brl(def.consume.X) + "/mês" : "valor inviável") + ".",
+      risks: "Resultado depende do retorno real de longo prazo; não considera risco de sequência" + (an.P.tau > 0 ? "" : ", tributação do resgate") + (s.phases && s.phases.on ? "" : " nem despesas de saúde crescentes") + ". Custos e impostos de qualquer produto utilizado devem ser avaliados à parte.",
+      inaction: ex ? "Mantido o aporte atual e o padrão de vida desejado, a reserva financeira se esgota aos " + ex + " anos." : "Mantido o plano atual, a reserva não se esgota até os " + p.horizonAge + " anos nas premissas informadas.",
+      owner: "Cliente e planejador",
+      review: ""
+    };
+  }
+
+
+  /* ---------- aviso legal do profissional ---------- */
+  function disclaimer(s) {
+    const p = s.pro;
+    const filled = !!(p.name && p.scope);
+    const cvm = p.cvm === "sim"
+      ? "Autorização de consultor de valores mobiliários (CVM): possui" + (p.cvmNo ? " — " + p.cvmNo : "") + "."
+      : "Não possui autorização de consultor de valores mobiliários da CVM; este material não contém recomendação individualizada de valores mobiliários.";
+    return {
+      filled,
+      lines: [
+        "Material educativo e de apoio ao planejamento financeiro, elaborado com base nas informações fornecidas pelo cliente e nas premissas indicadas. Projeções dependem de premissas e não garantem resultado futuro.",
+        "Profissional: " + (p.name || "[preencher]") + (p.cert ? " (" + p.cert + ")" : "") + ". " + cvm,
+        "Escopo do serviço: " + (p.scope || "[preencher]") + ". Remuneração: " + (p.fee || "[preencher]") + ". Conflitos de interesse: " + (p.conflicts || "[preencher; informe 'nenhum conhecido' se for o caso]") + "."
+      ]
+    };
+  }
+
+  return { balanco, fluxo, reserva, indicadores, quality, syncPatch, suggestions, draftRetirementMemo, disclaimer, statusOf, monthlyOf, RESERVE_ADD, RESERVE_BASE, FREQ };
+})(typeof Engine !== "undefined" ? Engine : require("./engine.js"));
+if (typeof module !== "undefined") module.exports = Planning;
+/* PLANNING:END */
+
+/* GOALS:BEGIN — metas de vida: valor em R$ de hoje, data, aporte necessário e financiamento por prioridade. Puro, sem DOM. */
+const Goals = (function (E) {
+  "use strict";
+
+  const num = (x) => (isFinite(x) ? x : 0);
+  const PRIO_RANK = { essencial: 0, importante: 1, desejo: 2 };
+  const monthlyRate = (rPct) => Math.pow(1 + rPct / 100, 1 / 12) - 1;
+  const annuityFV = (n, i) => (i === 0 ? n : (Math.pow(1 + i, n) - 1) / i);
+  // meses até 1º de janeiro do ano-alvo
+  const monthsTo = (year, now) => (year - now.getFullYear()) * 12 - now.getMonth();
+
+  /* Cada meta é calculada em termos reais (R$ de hoje): o aporte é reajustado pela inflação e o retorno é o real.
+     fvSaved = valor já reservado projetado até a data; need = o que falta; pmt = aporte mensal real que fecha o valor.
+     Os recursos livres (superávit − aporte da aposentadoria) são distribuídos por prioridade e, dentro dela, por data. */
+  function analyze(s, fl, bs, now, an) {
+    now = now || new Date();
+    const cfg = s.goalsCfg || { realReturn: 3 };
+    const inflM = Math.pow(1 + (s.rates.inflation || 0) / 100, 1 / 12);
+    const rows = s.goals.map(function (g) {
+      const amount = Math.max(0, num(g.amount)), saved = Math.max(0, num(g.saved));
+      const rate = g.rate == null ? num(cfg.realReturn) : num(g.rate);
+      const i = monthlyRate(rate), n = g.year > 0 ? monthsTo(g.year, now) : 0;
+      const valid = amount > 0 && g.year > 0;
+      const overdue = valid && n <= 0;
+      const fvSaved = n > 0 ? saved * Math.pow(1 + i, n) : saved;
+      const need = Math.max(0, amount - fvSaved);
+      const pmt = !valid || need <= 0 ? 0 : overdue ? need : need / annuityFV(n, i);
+      return {
+        id: g.id, label: g.label || "Meta sem nome", kind: g.kind, priority: g.priority, amount: amount, year: g.year, months: n, valid: valid, overdue: overdue,
+        saved: saved, rate: rate, i: i, fvSaved: fvSaved, need: need, pmt: pmt,
+        future: valid && n > 0 ? amount * Math.pow(inflM, n) : amount,
+        fundedPct: amount > 0 ? Math.min(1, fvSaved / amount) : 0, alloc: 0, reachPct: 0, status: valid ? "pendente" : "sem_dados"
+      };
+    });
+    const ranked = rows.filter((r) => r.valid).sort((a, b) => (PRIO_RANK[a.priority] - PRIO_RANK[b.priority]) || (a.months - b.months) || (a.id - b.id));
+    const executed = num(s.cashflow.executed);
+    const surplus = fl ? num(fl.surplus) : 0;
+    const available = Math.max(0, surplus - executed);
+    let left = available, required = 0;
+    ranked.forEach(function (r) {
+      required += r.pmt;
+      if (r.need <= 0) { r.status = "financiada"; r.reachPct = 1; return; }
+      if (r.overdue) { r.status = "vencida"; r.reachPct = r.fundedPct; return; }
+      const a = Math.min(r.pmt, left); r.alloc = a; left -= a;
+      r.reachPct = Math.min(1, (r.fvSaved + a * annuityFV(r.months, r.i)) / r.amount);
+      r.status = a >= r.pmt - 0.5 ? "no_caminho" : a > 0 ? "parcial" : "sem_recursos";
+    });
+    const pool = bs ? num(bs.byPurpose.objetivos) : 0;
+    const totalSaved = rows.reduce((t, r) => t + r.saved, 0);
+    const totals = {
+      amount: ranked.reduce((t, r) => t + r.amount, 0), saved: totalSaved, required: required, available: available, executed: executed, surplus: surplus,
+      gap: Math.max(0, required - available), slack: Math.max(0, available - required),
+      pool: pool, savedMismatch: bs && totalSaved > pool + 1 ? totalSaved - pool : 0,
+      retirementExtra: an && isFinite(an.consume.X) ? an.consume.X : null
+    };
+    return { rows: rows, ranked: ranked, totals: totals };
+  }
+
+  // Quanto a cobertura da aposentadoria cai se `amount` R$/mês do aporte atual for redirecionado às metas.
+  function retirementImpact(s, amount) {
+    const m = JSON.parse(JSON.stringify(s));
+    const cut = Math.min(Math.max(0, amount), Math.max(0, m.cashflow.executed));
+    m.cashflow.executed -= cut;
+    const a = E.analyze(m, 0);
+    return { cut: cut, coverage: a.consume.coverage, X: a.consume.X };
+  }
+
+  return { analyze, retirementImpact, monthsTo, monthlyRate, annuityFV, PRIO_RANK };
+})(typeof Engine !== "undefined" ? Engine : require("./engine.js"));
+if (typeof module !== "undefined") module.exports = Goals;
+/* GOALS:END */
+
+/* DEBT:BEGIN — dívidas e caixa: estratégias de quitação, amortizar × investir e ordem de uso do superávit. Puro, sem DOM. */
+const Debt = (function () {
+  "use strict";
+
+  const num = (x) => (isFinite(x) ? x : 0);
+  const mRate = (cetPct) => Math.pow(1 + num(cetPct) / 100, 1 / 12) - 1;
+  const EPS = 0.005;
+
+  const STRATEGY_INFO = {
+    none: { label: "Só as prestações atuais", desc: "Cada dívida segue o próprio contrato; nada é redirecionado." },
+    avalanche: { label: "Avalanche (maior custo primeiro)", desc: "Todo recurso extra vai para a dívida com maior CET. Minimiza o juro total." },
+    bola: { label: "Bola de neve (menor saldo primeiro)", desc: "Quita a menor dívida primeiro para liberar parcelas e manter o ritmo. Paga um pouco mais de juro, ajuda na disciplina." },
+    fluxo: { label: "Fluxo de caixa (maior alívio mensal)", desc: "Prioriza a dívida cuja quitação libera mais prestação por real amortizado. Útil quando o orçamento está apertado." }
+  };
+
+  function pick(active, strategy) {
+    const a = active.slice();
+    if (strategy === "avalanche") a.sort((x, y) => (y.i - x.i) || (x.bal - y.bal));
+    else if (strategy === "bola") a.sort((x, y) => (x.bal - y.bal) || (y.i - x.i));
+    else a.sort((x, y) => (y.pay / Math.max(y.bal, EPS) - x.pay / Math.max(x.bal, EPS)) || (x.bal - y.bal));
+    return a;
+  }
+
+  /* Simulação mensal. Juros do mês → prestação contratual → sobra extra (recurso novo + prestações já liberadas), aplicada pela estratégia. */
+  function simulate(debts, opts) {
+    opts = opts || {};
+    const strat = opts.strategy || "none", extra = strat === "none" ? 0 : Math.max(0, num(opts.extra)), max = opts.maxMonths || 600;
+    const D = debts.filter((d) => num(d.balance) > EPS).map((d, k) => ({ k: k, label: d.label || "Dívida", bal: num(d.balance), i: mRate(d.cet), pay: Math.max(0, num(d.payment)), cet: num(d.cet), paidAt: null, interest: 0, grows: false }));
+    let t = 0, totalInterest = 0, totalPaid = 0;
+    const series = [D.reduce((s, d) => s + d.bal, 0)];
+    while (t < max && D.some((d) => d.paidAt === null)) {
+      t++;
+      D.forEach(function (d) {
+        if (d.paidAt !== null) return;
+        const int = d.bal * d.i; d.bal += int; d.interest += int; totalInterest += int;
+        if (d.pay <= int + 1e-9) d.grows = true;
+        const p = Math.min(d.pay, d.bal); d.bal -= p; totalPaid += p;
+        if (d.bal <= EPS) { d.bal = 0; d.paidAt = t; }
+      });
+      if (strat !== "none") {
+        let pool = extra;
+        D.forEach((d) => { if (d.paidAt !== null && d.paidAt < t) pool += d.pay; });
+        pick(D.filter((d) => d.paidAt === null), strat).forEach(function (d) {
+          if (pool <= EPS) return;
+          const p = Math.min(pool, d.bal); d.bal -= p; pool -= p; totalPaid += p;
+          if (d.bal <= EPS) { d.bal = 0; d.paidAt = t; }
+        });
+      }
+      series.push(D.reduce((s, d) => s + d.bal, 0));
+    }
+    const never = D.some((d) => d.paidAt === null);
+    return {
+      months: never ? Infinity : t, never: never, totalInterest: totalInterest, totalPaid: totalPaid, series: series,
+      debts: D.map((d) => ({ label: d.label, cet: d.cet, payoffMonth: d.paidAt, interest: d.interest, grows: d.grows && d.paidAt === null }))
+    };
+  }
+
+  function compare(debts, extra) {
+    const out = {};
+    ["none", "avalanche", "bola", "fluxo"].forEach((k) => { out[k] = simulate(debts, { strategy: k, extra: extra }); });
+    const base = out.none;
+    Object.keys(out).forEach(function (k) {
+      const r = out[k];
+      r.interestSaved = isFinite(base.totalInterest) && !base.never && !r.never ? base.totalInterest - r.totalInterest : null;
+      r.monthsSaved = isFinite(base.months) && isFinite(r.months) ? base.months - r.months : null;
+    });
+    return out;
+  }
+
+  // Confere se saldo, CET, prestação e prazo informados são coerentes entre si.
+  function consistency(debts) {
+    return debts.filter((d) => num(d.balance) > EPS).map(function (d) {
+      const solo = simulate([d], { strategy: "none" });
+      const informed = Math.round(num(d.months));
+      let flag = null;
+      if (num(d.payment) <= 0) flag = "sem_prestacao";
+      else if (solo.never) flag = "nao_amortiza";
+      else if (informed > 0 && Math.abs(solo.months - informed) > Math.max(2, informed * 0.15)) flag = "prazo_diverge";
+      return { label: d.label || "Dívida", impliedMonths: solo.months, informedMonths: informed, flag: flag };
+    });
+  }
+
+  /* Amortizar × investir um valor único: patrimônio ao fim do prazo original, nominal.
+     A: amortiza (a prestação segue igual e o contrato encurta); a prestação liberada é investida.
+     B: investe o valor e segue pagando o contrato. altNetPct = retorno líquido de IR da alternativa (% a.a. nominal). */
+  function single(debt, lump) {
+    const i = mRate(debt.cet), pay = Math.max(0, num(debt.payment));
+    let bal = Math.max(0, num(debt.balance) - Math.max(0, lump)), t = 0, interest = 0;
+    const cash = [0];
+    if (bal <= EPS) return { months: 0, interest: 0, cash: cash, never: false };
+    if (pay <= bal * i + 1e-9) return { months: Infinity, interest: Infinity, cash: cash, never: true };
+    while (t < 600 && bal > EPS) {
+      t++;
+      const int = bal * i; bal += int; interest += int;
+      const p = Math.min(pay, bal); bal -= p; cash.push(p);
+    }
+    return { months: bal > EPS ? Infinity : t, interest: interest, cash: cash, never: bal > EPS };
+  }
+  function amortizeOrInvest(debt, lump, altNetPct) {
+    const L = Math.min(Math.max(0, num(lump)), num(debt.balance));
+    const B = single(debt, 0), A = single(debt, L);
+    if (B.never || !isFinite(B.months) || L <= 0) return { ok: false, reason: B.never ? "A prestação não amortiza a dívida." : "Informe um valor a amortizar." };
+    const n = B.months;
+    const wealth = function (altPct) {
+      const rm = Math.pow(1 + altPct / 100, 1 / 12) - 1;
+      let wA = 0;
+      for (let t = 1; t <= n; t++) wA += ((B.cash[t] || 0) - (A.cash[t] || 0)) * Math.pow(1 + rm, n - t);
+      return { wA: wA, wB: L * Math.pow(1 + rm, n) };
+    };
+    const w = wealth(num(altNetPct));
+    let lo = 0, hi = 200;
+    const d0 = wealth(0); let be;
+    if (d0.wA - d0.wB < 0) be = 0;
+    else { for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2, x = wealth(mid); if (x.wA - x.wB > 0) lo = mid; else hi = mid; } be = (lo + hi) / 2; }
+    return {
+      ok: true, lump: L, months: n, monthsAfter: A.months, interestSaved: B.interest - A.interest,
+      wealthAmortize: w.wA, wealthInvest: w.wB, diff: w.wA - w.wB, breakEvenPct: be,
+      verdict: w.wA - w.wB > 1 ? "amortizar" : w.wA - w.wB < -1 ? "investir" : "indiferente"
+    };
+  }
+
+  /* Ordem de uso do superávit: reserva → dívidas mais caras que o retorno líquido → demais objetivos.
+     Prazos estimados com o superávit informado, sem juros sobre os saldos (ordem de grandeza, não projeção). */
+  function cascade(p) {
+    const surplus = Math.max(0, num(p.surplus));
+    const debts = (p.debts || []).filter((d) => num(d.balance) > EPS && num(d.cet) > num(p.altNetPct));
+    const debtAmt = debts.reduce((t, d) => t + num(d.balance), 0);
+    const steps = [];
+    let cursor = 0;
+    const add = function (key, label, amount, note) {
+      const months = amount <= 0 ? 0 : surplus > 0 ? amount / surplus : null;
+      steps.push({ key: key, label: label, amount: amount, months: months, start: months === null ? null : cursor, end: months === null ? null : cursor + months, note: note, done: amount <= 0 });
+      if (months !== null) cursor += months;
+    };
+    add("reserva", "Completar a reserva de contingência", Math.max(0, num(p.reserveGap)), "Antes de acelerar dívidas: reserva protege contra novas dívidas caras.");
+    add("dividas", "Quitar dívidas com CET acima do retorno líquido", debtAmt, debts.length ? debts.map((d) => d.label || "Dívida").join(", ") : "Nenhuma dívida acima do retorno líquido esperado.");
+    return { surplus: surplus, steps: steps, freeAfter: surplus > 0 ? cursor : null, nextUses: "Depois dessas etapas, o superávit liberado financia as metas e a aposentadoria." };
+  }
+
+  return { simulate, compare, consistency, amortizeOrInvest, cascade, mRate, STRATEGY_INFO };
+})();
+if (typeof module !== "undefined") module.exports = Debt;
+/* DEBT:END */
+
+/* PROTECTION:BEGIN — proteção por necessidade: capital necessário em morte e invalidez, sem escolha de produto. Puro, sem DOM. */
+const Protection = (function () {
+  "use strict";
+
+  const num = (x) => (isFinite(x) ? x : 0);
+  const pos = (x) => Math.max(0, num(x));
+  // valor presente de uma renda mensal real por `years` anos, a uma taxa real anual
+  function annuityPV(pmt, ratePct, years) {
+    const n = Math.round(Math.max(0, years) * 12);
+    if (n === 0 || pmt <= 0) return 0;
+    const i = Math.pow(1 + ratePct / 100, 1 / 12) - 1;
+    return i === 0 ? pmt * n : pmt * (1 - Math.pow(1 + i, -n)) / i;
+  }
+
+  function status(coverage) {
+    if (coverage == null) return "na";
+    if (coverage >= 1) return "ok";
+    if (coverage >= 0.6) return "warn";
+    return "crit";
+  }
+
+  /* Método da necessidade (needs analysis): soma o que a família precisaria ter, desconta o que já existe.
+     Valores em R$ de hoje; renda convertida a valor presente à taxa real informada.
+     ctx = { fl, bs, goals (resultado de Goals.analyze, opcional) } */
+  function analyze(s, ctx) {
+    const p = s.protect, fl = ctx.fl, bs = ctx.bs;
+    const debtTotal = bs && bs.totalLiab > 0 ? bs.totalLiab : num(s.assets.debts);
+    const expense = fl ? fl.expenseTotal : num(s.cashflow.expense);
+    const essential = fl ? fl.essentialMonthly : expense;
+    const educ = ctx.goals ? ctx.goals.rows.filter((g) => g.kind === "educacao" && g.valid && !g.overdue).reduce((t, g) => t + g.amount, 0) : 0;
+    const estate = bs ? Math.max(0, bs.net) : 0;
+    // recursos que a família poderia usar sem desmontar a aposentadoria: reserva e recursos de outros objetivos, exceto bens ilíquidos
+    const liquidUsable = s.diag.bsAssets.reduce((t, a) => t + ((a.purpose === "reserva" || a.purpose === "objetivos") && a.liq !== "iliquida" ? pos(a.value) : 0), 0);
+    const retirementShare = (bs ? bs.retirementFin : 0) * Math.min(100, Math.max(0, num(p.usePct))) / 100;
+    const resourcesBase = liquidUsable + retirementShare;
+
+    // --- morte
+    const monthlyNeed = pos(expense * num(p.needPct) / 100 - num(p.survivorIncome) - num(p.pension));
+    const death = {
+      parts: [
+        { key: "final", label: "Custos finais e inventário", value: pos(p.finalFixed) + estate * pos(p.estatePct) / 100 },
+        { key: "dividas", label: "Quitação das dívidas", value: p.debtsPaid ? debtTotal : 0 },
+        { key: "transicao", label: "Fundo de transição", value: essential * pos(p.transitionMonths) },
+        { key: "renda", label: "Reposição de renda da família", value: annuityPV(monthlyNeed, num(p.rate), num(p.supportYears)) },
+        { key: "educ", label: "Educação dos dependentes", value: p.includeEducation ? educ : 0 }
+      ],
+      monthlyNeed: monthlyNeed
+    };
+    death.need = death.parts.reduce((t, x) => t + x.value, 0);
+    death.resources = resourcesBase + pos(p.existingLife);
+    death.gap = Math.max(0, death.need - death.resources);
+    death.coverage = death.need > 0 ? Math.min(2, death.resources / death.need) : null;
+    death.status = status(death.coverage);
+
+    // --- invalidez: a família continua com 100% do custo de vida, mais custos de cuidado
+    const yearsToRetire = Math.max(0, s.profile.retireAge - s.profile.currentAge);
+    const monthlyGap = pos(expense - num(p.survivorIncome) - num(p.disabPension));
+    const disability = {
+      parts: [
+        { key: "renda", label: "Reposição de renda até a aposentadoria", value: annuityPV(monthlyGap, num(p.rate), yearsToRetire) },
+        { key: "cuidado", label: "Custos de cuidado e adaptação", value: annuityPV(pos(p.careMonthly), num(p.rate), num(p.careYears)) }
+      ],
+      monthlyGap: monthlyGap, yearsToRetire: yearsToRetire
+    };
+    disability.need = disability.parts.reduce((t, x) => t + x.value, 0);
+    disability.resources = resourcesBase + pos(p.existingDisab);
+    disability.gap = Math.max(0, disability.need - disability.resources);
+    disability.coverage = disability.need > 0 ? Math.min(2, disability.resources / disability.need) : null;
+    disability.status = status(disability.coverage);
+
+    const hasDependents = num(p.deps) > 0 || num(p.survivorIncome) > 0;
+    return { death: death, disability: disability, hasDependents: hasDependents, inputs: { debtTotal: debtTotal, expense: expense, essential: essential, estate: estate, educ: educ, liquidUsable: liquidUsable, retirementShare: retirementShare } };
+  }
+
+  return { analyze, annuityPV, status };
+})();
+if (typeof module !== "undefined") module.exports = Protection;
+/* PROTECTION:END */
+
+/* SUCCESSION:BEGIN — liquidez para o inventário: base de cálculo, ITCMD, custos e caixa disponível fora do inventário. Puro, sem DOM.
+   Estimativa de ordem de grandeza: alíquotas, honorários e prazos variam por estado, comarca e tipo de inventário. */
+const Succession = (function () {
+  "use strict";
+
+  const num = (x) => (isFinite(x) ? x : 0);
+  const pos = (x) => Math.max(0, num(x));
+  const COMMUNITY = { comunhao_parcial: true, comunhao_universal: true };
+  const PENSION_RE = /pgbl|vgbl|previd/i;
+  const REGIME_LABEL = { comunhao_parcial: "Comunhão parcial de bens", comunhao_universal: "Comunhão universal de bens", separacao: "Separação de bens", participacao: "Participação final nos aquestos" };
+  // Pontos de partida para o preenchimento rápido; confirme com o advogado do caso.
+  const PRESETS = {
+    extrajudicial: { fees: 4, costs: 1.5, months: 6, label: "Extrajudicial (cartório, herdeiros capazes e em consenso)" },
+    judicial: { fees: 6, costs: 2, months: 24, label: "Judicial (litígio, incapazes ou sem consenso)" }
+  };
+
+  /* ctx = { bs (Planning.balanco), protection (opcional: usa protect.existingLife como seguro fora do inventário) }
+     Estimativa para o falecimento de quem é titular do patrimônio cadastrado. */
+  function analyze(s, ctx, overrides) {
+    const c = Object.assign({}, s.succ, overrides || {}), bs = ctx.bs;
+    const pensionAuto = s.diag.bsAssets.reduce((t, a) => t + (PENSION_RE.test(a.label || "") ? pos(a.value) : 0), 0);
+    const pension = c.pensionOverride != null ? pos(c.pensionOverride) : pensionAuto;
+    const life = pos(s.protect.existingLife);
+    const debts = pos(bs.totalLiab);
+    const assets = pos(bs.totalAssets);
+    const monte = Math.max(0, assets - pension - debts);          // monte-mor líquido de dívidas, sem previdência
+    const community = c.spouse && COMMUNITY[c.regime];
+    const commonShare = c.regime === "comunhao_universal" ? 1 : pos(c.commonPct) / 100;
+    const meacao = community ? monte * 0.5 * Math.min(1, commonShare) : 0;
+    const base = Math.max(0, monte - meacao);                      // base do ITCMD (herança, sem a meação)
+    const itcmd = base * pos(c.itcmd) / 100;
+    const fees = monte * pos(c.fees) / 100;                         // honorários e custas sobre o monte-mor
+    const costs = monte * pos(c.costs) / 100;
+    const carry = pos(c.carry) * pos(c.months);
+    const total = itcmd + fees + costs + carry;
+    const liquidInside = pos(bs.byLiq.imediata) + pos(bs.byLiq.curta);
+    const liquidInsideEstate = Math.max(0, liquidInside - (s.diag.bsAssets.reduce((t, a) => t + (PENSION_RE.test(a.label || "") && (a.liq === "imediata" || a.liq === "curta") ? pos(a.value) : 0), 0)));
+    const outside = pension + life;
+    const gap = Math.max(0, total - outside);
+    const gapAfterRelease = Math.max(0, total - outside - liquidInsideEstate);
+    const illiquid = pos(bs.byLiq.iliquida);
+    const estateAssets = Math.max(1, assets - pension);
+    return {
+      assets: assets, pension: pension, pensionAuto: pensionAuto, pensionIsOverride: c.pensionOverride != null, life: life, debts: debts,
+      monte: monte, meacao: meacao, base: base, community: !!community, legitima: monte * 0.5, heirs: c.heirs,
+      itcmd: itcmd, fees: fees, costs: costs, carry: carry, total: total, totalPct: monte > 0 ? total / monte * 100 : null,
+      liquidOutside: outside, liquidInside: liquidInsideEstate, gap: gap, gapAfterRelease: gapAfterRelease,
+      coverage: total > 0 ? Math.min(2, outside / total) : null,
+      illiquid: illiquid, illiquidShare: illiquid / estateAssets * 100,
+      parts: [
+        { key: "itcmd", label: "ITCMD (imposto estadual sobre a herança)", value: itcmd },
+        { key: "fees", label: "Honorários advocatícios", value: fees },
+        { key: "costs", label: "Custas, emolumentos e certidões", value: costs },
+        { key: "carry", label: "Custo de manter os bens durante o inventário", value: carry }
+      ],
+      params: c
+    };
+  }
+
+  // Quanto o custo e a lacuna mudam com a alíquota do ITCMD (varia por estado, em geral entre 2% e 8%).
+  function sensitivity(s, ctx, rates) {
+    return (rates || [2, 4, 6, 8]).map(function (r) { const a = analyze(s, ctx, { itcmd: r }); return { itcmd: r, total: a.total, gap: a.gap, totalPct: a.totalPct }; });
+  }
+
+  return { analyze, sensitivity, REGIME_LABEL, PRESETS, PENSION_RE };
+})();
+if (typeof module !== "undefined") module.exports = Succession;
+/* SUCCESSION:END */
+
+/* VERSIONS:BEGIN — fotografias do plano e comparação entre versões. Os indicadores são recalculados a cada comparação. Puro, sem DOM. */
+const Versions = (function (E, P, G, D, R, S) {
+  "use strict";
+
+  const num = (x) => (isFinite(x) ? x : 0);
+  const altNetOf = (s) => (s.debtPlan.altReturn != null ? s.debtPlan.altReturn : s.rates.nominal * 0.85);
+
+  /* better: "up" = maior é melhor · "down" = menor é melhor · "none" = só informativo */
+  function kpis(s, now) {
+    now = now || new Date();
+    const bs = P.balanco(s), fl = P.fluxo(s, bs), rs = P.reserva(s, fl, bs);
+    const v = E.validate(s), an = v.errors.length ? null : E.analyze(s, 0);
+    const exhaust = an ? E.exhaustAge(E.paths(s, an).current) : null;
+    const g = G.analyze(s, fl, bs, now, an), pr = R.analyze(s, { fl: fl, bs: bs, goals: g }), q = P.quality(s);
+    const dc = D.simulate(s.diag.bsLiabilities, { strategy: "none" }), sc = S.analyze(s, { bs: bs });
+    const lastFin = an && s.profile.horizonAge ? Math.max(0, an.termNow) : null;
+    return [
+      { key: "net", label: "Patrimônio líquido", fmt: "money", better: "up", value: bs.net },
+      { key: "financial", label: "Patrimônio financeiro", fmt: "money", better: "up", value: bs.financial },
+      { key: "surplus", label: "Superávit sustentável (mês)", fmt: "money", better: "up", value: fl.surplus },
+      { key: "reserve", label: "Meses de liquidez", fmt: "num1", better: "up", value: rs.monthsHave },
+      { key: "coverage", label: "Cobertura da renda desejada", fmt: "pct0", better: "up", value: an && an.consume.coverage != null ? an.consume.coverage * 100 : null },
+      { key: "extraX", label: "Aporte adicional p/ aposentadoria", fmt: "money", better: "down", value: an && isFinite(an.consume.X) ? an.consume.X : null },
+      { key: "exhaust", label: "Reserva se esgota aos", fmt: "age", better: "up", value: an ? (exhaust == null ? s.profile.horizonAge + 1 : exhaust) : null, horizon: s.profile.horizonAge },
+      { key: "legacy", label: "Reserva financeira ao fim do horizonte", fmt: "money", better: "up", value: lastFin },
+      { key: "debt", label: "Dívidas (saldo)", fmt: "money", better: "down", value: bs.totalLiab },
+      { key: "debtMonths", label: "Meses para quitar (contratos atuais)", fmt: "months", better: "down", value: dc.never ? null : dc.months },
+      { key: "goalsReq", label: "Metas: aporte mensal necessário", fmt: "money", better: "none", value: g.totals.required },
+      { key: "goalsGap", label: "Metas: falta de recursos (mês)", fmt: "money", better: "down", value: g.totals.gap },
+      { key: "deathGap", label: "Proteção: lacuna em caso de morte", fmt: "money", better: "down", value: pr.death.gap },
+      { key: "disabGap", label: "Proteção: lacuna em caso de invalidez", fmt: "money", better: "down", value: pr.disability.gap },
+      { key: "succGap", label: "Sucessão: lacuna de caixa no inventário", fmt: "money", better: "down", value: sc.gap },
+      { key: "quality", label: "Dados críticos confirmados", fmt: "pct0", better: "up", value: q.critical.pct }
+    ];
+  }
+
+  function compare(sa, sb, now) {
+    const ka = kpis(sa, now), kb = kpis(sb, now);
+    return ka.map(function (a, i) {
+      const b = kb[i];
+      const bothNum = a.value != null && b.value != null;
+      const delta = bothNum ? b.value - a.value : null;
+      const tol = Math.max(1e-9, Math.abs(a.value || 0) * 1e-6, a.fmt === "money" ? 0.5 : 0.005);
+      let verdict = "same";
+      if (a.better === "none") verdict = bothNum && Math.abs(delta) > tol ? "changed" : "same";
+      else if (bothNum && Math.abs(delta) > tol) verdict = (delta > 0) === (a.better === "up") ? "better" : "worse";
+      else if (!bothNum && (a.value == null) !== (b.value == null)) verdict = "changed";
+      return { key: a.key, label: a.label, fmt: a.fmt, better: a.better, a: a.value, b: b.value, ha: a.horizon, hb: b.horizon, delta: delta, verdict: verdict };
+    });
+  }
+
+  /* Premissas e listas que mudaram entre duas versões. */
+  const PATHS = [
+    ["profile.currentAge", "Idade atual", "int"], ["profile.retireAge", "Idade de aposentadoria", "int"], ["profile.horizonAge", "Expectativa de vida", "int"],
+    ["rates.nominal", "Retorno nominal a.a.", "pct"], ["rates.inflation", "Inflação a.a.", "pct"], ["rates.differentiate", "Taxas diferentes após aposentar", "bool"],
+    ["rates.nominalPost", "Retorno nominal após aposentar", "pct"], ["rates.inflationPost", "Inflação após aposentar", "pct"],
+    ["cashflow.desiredWithdrawal", "Padrão de vida desejado", "money"], ["cashflow.executed", "Aporte realizado", "money"], ["cashflow.minLegacy", "Legado mínimo", "money"], ["cashflow.escalate", "Reajuste pela inflação", "bool"],
+    ["assets.liquid", "Recursos financeiros (Aposentadoria)", "money"], ["assets.illiquid", "Patrimônio imobilizado (Aposentadoria)", "money"], ["assets.debts", "Dívidas (Aposentadoria)", "money"],
+    ["phases.on", "Gastos por fase", "bool"], ["retTax.on", "IR sobre o resgate", "bool"], ["retTax.manual", "Alíquota efetiva manual", "pct"],
+    ["goalsCfg.realReturn", "Retorno real das metas", "pct"], ["debtPlan.extra", "Recurso extra para dívidas", "money"], ["debtPlan.strategy", "Estratégia de quitação", "text"], ["debtPlan.altReturn", "Retorno líquido da alternativa", "pct"],
+    ["protect.needPct", "Proteção: % do custo mantido", "pct"], ["protect.survivorIncome", "Proteção: renda do cônjuge", "money"], ["protect.supportYears", "Proteção: anos de sustento", "int"],
+    ["protect.existingLife", "Proteção: capital existente (morte)", "money"], ["protect.existingDisab", "Proteção: capital existente (invalidez)", "money"],
+    ["mc.vol", "Volatilidade (Monte Carlo)", "pct"], ["succ.itcmd", "Sucessão: ITCMD", "pct"], ["succ.regime", "Sucessão: regime de bens", "text"], ["succ.months", "Sucessão: prazo do inventário (meses)", "int"],
+    ["diag.shocks", "Choques previsíveis da reserva", "money"], ["diag.monthsOverride", "Meses de reserva (manual)", "num1"]
+  ];
+  const LISTS = [
+    ["diag.bsAssets", "Ativo", [["value", "valor", "money"], ["liq", "liquidez", "text"], ["purpose", "finalidade", "text"]]],
+    ["diag.bsLiabilities", "Dívida", [["balance", "saldo", "money"], ["cet", "CET", "pct"], ["payment", "prestação", "money"]]],
+    ["diag.flow", "Fluxo", [["value", "valor", "money"], ["freq", "periodicidade", "text"]]],
+    ["goals", "Meta", [["amount", "valor", "money"], ["year", "ano", "int"], ["saved", "já reservado", "money"], ["priority", "prioridade", "text"]]],
+    ["retIncome", "Renda na aposentadoria", [["value", "valor", "money"], ["ageFrom", "a partir da idade", "int"]]],
+    ["phaseRows", "Fase de gasto", [["pct", "% do gasto", "pct"], ["health", "saúde extra", "money"]]],
+    ["taxRows", "Estrutura tributária", [["value", "valor", "money"], ["kind", "tipo", "text"], ["years", "anos", "int"]]]
+  ];
+  const get = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
+  const same = (x, y) => (typeof x === "number" && typeof y === "number" ? Math.abs(x - y) < 1e-9 : x === y);
+
+  function changes(sa, sb) {
+    const out = [];
+    PATHS.forEach(function (p) {
+      const a = get(sa, p[0]), b = get(sb, p[0]);
+      if (!same(a, b)) out.push({ group: "Premissas", label: p[1], a: a, b: b, fmt: p[2] });
+    });
+    LISTS.forEach(function (L) {
+      const la = get(sa, L[0]) || [], lb = get(sb, L[0]) || [];
+      const key = (r, i) => (r.label || ("#" + (i + 1))).trim().toLowerCase();
+      const ma = {}, mb = {};
+      la.forEach((r, i) => { ma[key(r, i)] = r; }); lb.forEach((r, i) => { mb[key(r, i)] = r; });
+      Object.keys(mb).forEach(function (k) {
+        if (!ma[k]) out.push({ group: L[1] + "s", label: L[1] + " adicionado(a): " + (mb[k].label || k), a: null, b: null, fmt: "text" });
+        else L[2].forEach(function (f) { if (!same(ma[k][f[0]], mb[k][f[0]])) out.push({ group: L[1] + "s", label: L[1] + " “" + (mb[k].label || k) + "”: " + f[1], a: ma[k][f[0]], b: mb[k][f[0]], fmt: f[2] }); });
+      });
+      Object.keys(ma).forEach(function (k) { if (!mb[k]) out.push({ group: L[1] + "s", label: L[1] + " removido(a): " + (ma[k].label || k), a: null, b: null, fmt: "text" }); });
+    });
+    return out;
+  }
+
+  /* Fotografia: estado completo sem a lista de versões (evita recursão). */
+  function make(state, name, note, nowISO, auto) {
+    const inner = JSON.parse(JSON.stringify(state)); delete inner.versions;
+    const id = (state.versions || []).reduce((m, v) => Math.max(m, v.id || 0), 0) + 1;
+    return { id: id, name: String(name || "").slice(0, 80) || "Versão " + id, note: String(note || "").slice(0, 400), date: nowISO, auto: !!auto, state: inner };
+  }
+
+  // Estado de uma versão pronto para uso (mantém a lista de versões atual).
+  function restoreState(version, currentVersions) {
+    const s = JSON.parse(JSON.stringify(version.state));
+    s.versions = JSON.parse(JSON.stringify(currentVersions || []));
+    return s;
+  }
+
+  return { kpis, compare, changes, make, restoreState, altNetOf, PATHS, LISTS };
+})(
+  typeof Engine !== "undefined" ? Engine : require("./engine.js"),
+  typeof Planning !== "undefined" ? Planning : require("./planning.js"),
+  typeof Goals !== "undefined" ? Goals : require("./goals.js"),
+  typeof Debt !== "undefined" ? Debt : require("./debt.js"),
+  typeof Protection !== "undefined" ? Protection : require("./protection.js"),
+  typeof Succession !== "undefined" ? Succession : require("./succession.js")
+);
+if (typeof module !== "undefined") module.exports = Versions;
+/* VERSIONS:END */
+
 /* APP:BEGIN */
 (function () {
   "use strict";
@@ -1438,3 +2891,4 @@
   renderAll(); saveNow();
 })();
 /* APP:END */
+
