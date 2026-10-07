@@ -49,7 +49,7 @@ Testes de navegador (precisam de Playwright e de `src/assets`, que já traz Char
 
 ## Hospedagem gratuita
 
-Veja [HOSPEDAGEM.md](HOSPEDAGEM.md): publicação no GitHub Pages, uso no celular, atualização e cuidados com os dados.
+Veja [HOSPEDAGEM.md](HOSPEDAGEM.md): publicação no GitHub Pages em `assetplanning.elizeumanicoba.com.br`, uso no celular, atualização e cuidados com os dados.
 
 ## Avisos
 

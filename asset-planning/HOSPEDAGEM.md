@@ -1,24 +1,41 @@
-# Hospedagem gratuita no GitHub Pages
+# Hospedagem gratuita no GitHub Pages, no seu domínio
 
-O site pronto para publicar fica na pasta **`docs/`, na raiz do repositório**. O GitHub Pages só publica a raiz ou
-essa pasta, por isso o `build.py` grava lá. O endereço do GitHub Pages é sempre
-`https://USUARIO.github.io/NOME-DO-REPOSITORIO/`. Para o link dizer claramente **assetplanning**, o repositório
-deve se chamar `assetplanning`:
+O site pronto para publicar fica na pasta **`docs/`, na raiz do repositório** (o GitHub Pages só publica a raiz ou
+essa pasta; o `build.py` grava lá). O endereço final é um subdomínio do seu domínio:
 
-    https://elizeumanicoba.github.io/assetplanning/
+    https://assetplanning.elizeumanicoba.com.br
 
-## 1. Publicar (uma única vez, uns 3 minutos)
+O site principal (`elizeumanicoba.github.io`, com o domínio `elizeumanicoba.com.br`) **não é alterado**: ele é gerado
+e publicado por outro fluxo automático, e a ferramenta fica no repositório `myproject`, com o próprio endereço.
 
-1. **Renomear o repositório:** no GitHub, **Settings → General → Repository name**, digite `assetplanning` e
-   clique em **Rename**. O link antigo continua redirecionando.
-2. Entre em **Settings → Pages** (menu lateral, em *Code and automation*).
-3. Em **Build and deployment → Source**, escolha **Deploy from a branch**.
-4. Em **Branch**, escolha **`master`** e, ao lado, a pasta **`/docs`**. Clique em **Save**.
-5. Espere de 1 a 3 minutos e recarregue a página de Settings → Pages. Aparece *“Your site is live at …”*.
-6. Abra o endereço no computador e no celular. A primeira tela é a **Abertura da reunião**.
+## 1. Publicar (uma única vez, uns 10 minutos; a ordem importa)
 
-No plano gratuito do GitHub, o Pages exige repositório **público** (este já é). Para um repositório privado ou
-acesso com senha, veja a seção 6.
+1. **DNS primeiro.** No painel onde o DNS de `elizeumanicoba.com.br` é gerenciado (Registro.br, Cloudflare, Hostinger
+   ou outro), crie um registro:
+
+   | Tipo | Nome (host) | Valor |
+   |------|-------------|-------|
+   | CNAME | `assetplanning` | `elizeumanicoba.github.io` |
+
+   Se o painel pedir o nome completo, use `assetplanning.elizeumanicoba.com.br`. No Cloudflare, deixe a nuvem
+   **cinza** ("somente DNS"), pelo menos até o certificado sair.
+2. No GitHub, abra o repositório `myproject` → **Settings → Pages**.
+3. Em **Build and deployment → Source**, escolha **Deploy from a branch**; em **Branch**, `master` e a pasta
+   **`/docs`**. Clique em **Save**.
+4. Em **Custom domain**, confirme `assetplanning.elizeumanicoba.com.br` (o arquivo `docs/CNAME` já o traz) e salve.
+   O GitHub verifica o DNS; pode levar de alguns minutos até algumas horas.
+5. Quando aparecer a opção, marque **Enforce HTTPS** (o certificado é emitido sozinho).
+6. Abra `https://assetplanning.elizeumanicoba.com.br`. A primeira tela é a **Abertura da reunião**.
+
+Se o passo 4 mostrar "DNS check unsuccessful", o registro CNAME ainda não propagou ou está com o nome errado.
+Enquanto o DNS não aponta, o endereço do GitHub (`elizeumanicoba.github.io/myproject/`) também não abre, porque o
+`CNAME` manda para o domínio. Faça o passo 1 antes.
+
+**Proteção contra sequestro de subdomínio (recomendado):** em **github.com → Settings (da conta) → Pages → Add a
+domain**, verifique `elizeumanicoba.com.br` com o registro TXT que o GitHub mostrar. Assim ninguém consegue
+publicar páginas no seu domínio por outro repositório.
+
+No plano gratuito do GitHub, o Pages exige repositório **público** (este já é).
 
 ## 2. Usar no celular e no tablet
 
@@ -30,9 +47,12 @@ acesso com senha, veja a seção 6.
 
 ## 3. Seus dados e os dos clientes
 
-- O site é público, mas **nenhum dado de cliente vai para o GitHub**: tudo fica no navegador de cada aparelho.
-  Quem abrir o link vê só a ferramenta, com dados de exemplo. O site pede aos buscadores para não ser listado,
-  mas quem tem o link consegue abrir.
+- O endereço é público: o GitHub Pages não tem senha. Mas **nenhum dado de cliente vai para o GitHub nem para o
+  site**: tudo fica no navegador de cada aparelho. Quem abrir o link vê só a ferramenta, com dados de exemplo.
+  A página pede aos buscadores para não ser listada; evite colocar um link para ela no site principal. Um subdomínio
+  com HTTPS aparece em registros públicos de certificados, então ele não é secreto.
+- O subdomínio é uma origem separada do site principal. O navegador guarda os dados do app por origem, então o site
+  `elizeumanicoba.com.br` e seus scripts não conseguem ler os planos salvos pela ferramenta.
 - Cada aparelho e cada navegador têm os próprios dados. Para levar um plano do notebook ao celular:
   **Abertura → Seus dados e backup → Salvar backup agora (.json)**; no outro aparelho, em
   **Aposentadoria → Backup e privacidade**, cole o texto do arquivo em **Colar para restaurar**.
@@ -40,8 +60,6 @@ acesso com senha, veja a seção 6.
 - **Nunca coloque no repositório** backups `.json` nem PDFs de clientes: o repositório é público. O `.gitignore`
   já ignora `asset-planning-backup*.json` e `*.pdf`.
 - Faça um backup ao fim de cada reunião, depois do aceite do IPS. Limpar o histórico do navegador apaga os dados.
-- Todos os sites publicados em `elizeumanicoba.github.io` compartilham o mesmo armazenamento do navegador. Não
-  publique ali outros sites em que você não confie. Um domínio próprio (seção 5) isola o app.
 
 ## 4. Atualizar o site
 
@@ -51,19 +69,18 @@ acesso com senha, veja a seção 6.
 O Pages republica sozinho em poucos minutos. Quem tem o app aberto ou instalado recebe o aviso *“Nova versão do app
 instalada. Recarregue a página”*. Os dados salvos não são afetados.
 
-## 5. Opcional
+## 5. Se precisar de acesso restrito
 
-- **Domínio próprio**, como `assetplanning.com.br` (cerca de R$ 40 por ano, comprado em um registrador): Settings →
-  Pages → **Custom domain**. Dá um link mais curto e separa os dados do app de qualquer outro site do GitHub.
-
-## 6. Se precisar de acesso restrito
-
-O Pages gratuito é sempre público. Para exigir login: **Cloudflare Pages** com **Cloudflare Access** (grátis até
-50 usuários) ou **Netlify**/**Vercel** com proteção por senha (alguns recursos são pagos). O conteúdo de `docs/`
-funciona em qualquer hospedagem estática, sem alteração.
+O Pages gratuito é sempre público. Para exigir login: **Cloudflare Access** (grátis até 50 usuários; exige o DNS
+do domínio na Cloudflare) com a ferramenta no Cloudflare Pages, ou **Netlify**/**Vercel** com proteção por senha
+(alguns recursos são pagos). O conteúdo de `docs/` funciona em qualquer hospedagem estática, sem alteração. Também
+é possível criptografar o app com senha no próprio navegador; isso protege o código da ferramenta, não os dados
+(que já ficam locais).
 
 ## Problemas comuns
 
-- **Página 404:** confira branch e pasta `/docs` em Settings → Pages e aguarde alguns minutos.
+- **Página 404:** confira branch `master` e pasta `/docs` em Settings → Pages e aguarde alguns minutos.
+- **"DNS check unsuccessful":** confira o registro CNAME (nome `assetplanning`, valor `elizeumanicoba.github.io`, sem
+  barra nem `https://`) e aguarde a propagação.
 - **Página antiga depois de atualizar:** recarregue duas vezes ou feche e abra o app instalado.
 - **Os dados sumiram:** vieram de outro navegador/aparelho ou o histórico foi limpo. Restaure o último backup.

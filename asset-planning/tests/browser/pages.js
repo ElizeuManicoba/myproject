@@ -1,9 +1,10 @@
-// Site do GitHub Pages (docs/) servido num subcaminho, como em https://usuario.github.io/repositorio/:
+// Site do GitHub Pages (docs/). Por padrão na raiz do domínio (assetplanning.elizeumanicoba.com.br);
+// BASE=/assetplanning/ simula o endereço de projeto https://usuario.github.io/repositorio/:
 const { go } = require('./nav.js');
 // CSP, nenhum pedido externo, fontes locais, service worker, uso sem internet, instalação, backup e PDF.
 const { chromium, devices } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..', '..', '..', 'docs'), BASE = '/assetplanning/';
+const ROOT = path.join(__dirname, '..', '..', '..', 'docs'), BASE = process.env.BASE || '/';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain' };
 let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', n, x === undefined ? '' : x); } else console.log('ok  ', n, x === undefined ? '' : x); };
 (async () => {

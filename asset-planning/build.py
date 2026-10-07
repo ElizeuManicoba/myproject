@@ -7,6 +7,7 @@
 """
 import hashlib, json, os, shutil
 here = os.path.dirname(os.path.abspath(__file__))
+DOMAIN = 'assetplanning.elizeumanicoba.com.br'
 root = os.path.dirname(here)  # raiz do repositório: o GitHub Pages só publica a raiz ou a pasta /docs dela
 src, dist = (os.path.join(here, d) for d in ('src', 'dist'))
 docs = os.path.join(root, 'docs')
@@ -92,5 +93,6 @@ shell = ["./", "index.html", "manifest.webmanifest", "assets/app.css", "assets/a
          "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png", "assets/fonts/fraunces-opsz.woff2", "assets/fonts/public-sans.woff2"]
 wr('sw.js', rd('pwa/sw.template.js').replace('__BUILD_ID__', BUILD).replace('__SHELL__', json.dumps(shell)), docs)
 wr('.nojekyll', '', docs)
+wr('CNAME', DOMAIN + '\n', docs)  # domínio próprio do GitHub Pages; precisa do registro CNAME no DNS
 wr('robots.txt', 'User-agent: *\nDisallow: /\n', docs)
 print(f"build {BUILD} | artefato {len(artifact)//1024} KB | autônomo {len(local)//1024} KB | ../docs/assets/app.js {len(js)//1024} KB")
