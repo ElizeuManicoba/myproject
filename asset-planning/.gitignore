@@ -1,0 +1,6 @@
+vendor
+dist/asset-planning.local.html
+node_modules/
+*.pdf
+asset-planning-backup*.json
+ap_*.png

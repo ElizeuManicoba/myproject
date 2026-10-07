@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="pt-BR" data-host="pages">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="build-id" content="660de8bbea">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#f2f4ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131512" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Asset Planning">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Asset Planning</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<header class="appbar" id="appbar">
+<div class="topbar">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke="var(--brand)" stroke-width="1.6"/><path d="M6.8 15.4 10.2 11.6 12.9 13.8 17.4 8.4" stroke="var(--brand)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.3" fill="var(--brand)"/></svg>
+    <div><div class="name">Asset Planning</div><div class="tag">Planejamento patrimonial e tributário</div></div>
+  </div>
+  <nav class="stages" id="stages" role="tablist" aria-label="Etapas da reunião">
+    <button class="stage" role="tab" data-stage="open" data-tab="open" aria-selected="false"><span class="num">1</span><span class="lbl">Abertura</span></button>
+    <button class="stage" role="tab" data-stage="diag" data-tab="diag" aria-selected="false"><span class="num">2</span><span class="lbl">Diagnóstico</span></button>
+    <button class="stage" role="tab" data-stage="obj" data-tab="obj" aria-selected="false"><span class="num">3</span><span class="lbl">Objetivos</span></button>
+    <button class="stage" role="tab" data-stage="ana" aria-selected="false"><span class="num">4</span><span class="lbl">Análises</span></button>
+    <button class="stage" role="tab" data-stage="tax" aria-selected="false"><span class="num">5</span><span class="lbl">Tributação</span></button>
+    <button class="stage" role="tab" data-stage="syn" aria-selected="false"><span class="num">6</span><span class="lbl">Síntese e plano</span></button>
+    <button class="stage" role="tab" data-stage="ips" data-tab="ips" aria-selected="false"><span class="num">7</span><span class="lbl">Compromisso</span></button>
+  </nav>
+  <div class="grow"></div>
+  <button class="stage util" role="tab" data-tab="ver" aria-selected="false"><span class="lbl">Versões</span></button>
+  <div class="who" id="whoLine"></div>
+</div>
+<div class="substrip" id="substrip" role="tablist" aria-label="Telas da etapa">
+  <div class="sub-group" data-stage="ana">
+    <button class="tab" role="tab" data-tab="cx" aria-selected="false">Caixa e dívidas</button>
+    <button class="tab" role="tab" data-tab="prot" aria-selected="false">Proteção</button>
+    <button class="tab" role="tab" data-tab="apos" aria-selected="true">Aposentadoria</button>
+    <button class="tab" role="tab" data-tab="succ" aria-selected="false">Sucessão</button>
+  </div>
+  <div class="sub-group" data-stage="tax">
+    <button class="tab" role="tab" data-tab="irm" aria-selected="false">IRPF mensal</button>
+    <button class="tab" role="tab" data-tab="ira" aria-selected="false">IRPF anual &amp; PGBL</button>
+    <button class="tab" role="tab" data-tab="pgbl" aria-selected="false">PGBL no longo prazo</button>
+  </div>
+  <div class="sub-group" data-stage="syn">
+    <button class="tab" role="tab" data-tab="syn" aria-selected="false">Diagnóstico final</button>
+    <button class="tab" role="tab" data-tab="plan" aria-selected="false">Plano de ação</button>
+  </div>
+</div>
+</header>
+
+<!-- ======================= ABERTURA ======================= -->
+<div class="pane pane-scroll" id="pane-open">
+  <div class="sheet narrow" id="sheetOpen">
+    <div class="masthead">
+      <div><h2>Abertura da reunião</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b></div>
+    </div>
+    <div class="banner info"><b>Como a reunião funciona.</b> A ferramenta segue as etapas da conversa: conhecer o cliente, diagnosticar, definir objetivos, analisar cada tema, decidir e, no fim, formalizar os compromissos. Preencha esta tela antes de começar; ao terminar, a etapa Compromisso gera o IPS de planejamento para o cliente assinar.</div>
+
+    <section class="block"><div class="eyebrow"><span>Roteiro da reunião</span></div><div id="roadmap"></div></section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Cliente e reunião</span></div>
+      <div class="form-card">
+        <div class="frow"><div class="fl">Nome do cliente<small>Ou um identificador, se preferir não usar o nome completo.</small></div><div class="fi" style="width:300px"><input type="text" maxlength="80" data-path="client.name" autocomplete="off" style="text-align:left"></div></div>
+        <div class="frow"><div class="fl">Data da reunião</div><div class="fi"><input type="date" data-path="meeting.date"></div></div>
+        <div class="frow"><div class="fl">Participantes<small>Quem está na reunião (ex.: casal, contador).</small></div><div class="fi" style="width:300px"><input type="text" maxlength="300" data-path="meeting.participants" autocomplete="off" style="text-align:left"></div></div>
+        <div class="frow"><div class="fl">Motivo e expectativas<small>O que o cliente espera sair desta reunião.</small></div><div class="fi" style="width:360px"><textarea rows="3" maxlength="600" data-path="meeting.purpose"></textarea></div></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Documentos que o cliente trouxe</span></div>
+      <div class="form-card">
+        <div class="card-hint">Marque o que já foi entregue. O que faltar vira sugestão de compromisso do cliente na etapa final (você decide se entra no documento). Dados marcados como “pendente” no Diagnóstico também viram compromisso.</div>
+        <div class="doc-grid">
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.extratos"><span>Extratos de contas e de investimentos</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.irpf"><span>Declaração de IRPF e recibo</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.dividas"><span>Contratos e saldos de dívidas</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.apolices"><span>Apólices de seguros e coberturas</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.previdencia"><span>Extratos de previdência privada</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.imoveis"><span>Escrituras e valores de imóveis</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.despesas"><span>Faturas e comprovantes de despesas</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.testamento"><span>Testamento, doações e regime de bens</span></label>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Percepção de risco do cliente</span></div>
+      <div class="form-card">
+        <div class="card-hint">Registro da conversa, usado só no planejamento. <b>Não é perfil de investidor</b> para fins de adequação de produtos (suitability), que é outro procedimento.</div>
+        <div class="frow"><div class="fl">Como o cliente se descreve diante de oscilações</div><div class="fi" style="width:230px"><select data-path="risk.tolerance"><option value="">Não informado</option><option value="conservadora">Conservadora: prefere previsibilidade</option><option value="moderada">Moderada: aceita oscilar um pouco</option><option value="arrojada">Arrojada: aceita oscilar bastante</option></select></div></div>
+        <div class="frow"><div class="fl">Queda do patrimônio financeiro que suportaria sem mudar o plano<small>Usada para checar os gatilhos de revisão do compromisso.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="risk.drawdown" data-pct="1"></div></div>
+        <div class="frow"><div class="fl">Observações</div><div class="fi" style="width:360px"><textarea rows="2" maxlength="1000" data-path="risk.notes"></textarea></div></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Profissional e escopo</span></div>
+      <div class="form-card">
+        <h3>Identificação usada no aviso legal de todos os relatórios</h3>
+        <div class="card-hint">Sem uma instituição por trás, estas informações são a sua proteção e a transparência devida ao cliente. Recomendações individualizadas de valores mobiliários exigem autorização própria da CVM (consultor): certificação, como o CFP, não substitui essa autorização. Confirme o enquadramento de cada serviço com um advogado de sua confiança.</div>
+        <div class="frow"><div class="fl">Nome do planejador ou escritório</div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.name" autocomplete="off"></div></div>
+        <div class="frow"><div class="fl">Certificações<small>Ex.: CFP®, CPA-20.</small></div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.cert"></div></div>
+        <div class="frow"><div class="fl">Autorização de consultor de valores mobiliários (CVM)</div><div class="fi" style="width:260px"><select data-path="pro.cvm"><option value="nao">Não possuo</option><option value="sim">Possuo</option></select></div></div>
+        <div class="frow"><div class="fl">Registro/número da autorização<small>Preencha se possuir.</small></div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.cvmNo"></div></div>
+        <div class="frow"><div class="fl">Escopo do serviço<small>O que está incluído e o que não está.</small></div><div class="fi" style="width:360px"><textarea rows="3" maxlength="1000" data-path="pro.scope"></textarea></div></div>
+        <div class="frow"><div class="fl">Remuneração</div><div class="fi" style="width:360px"><textarea rows="2" maxlength="500" data-path="pro.fee"></textarea></div></div>
+        <div class="frow"><div class="fl">Conflitos de interesse<small>Se não houver, escreva "nenhum conhecido".</small></div><div class="fi" style="width:360px"><textarea rows="2" maxlength="1000" data-path="pro.conflicts"></textarea></div></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Seus dados e backup</span></div>
+      <div class="form-card"><div class="card-hint">Tudo o que você digita fica neste aparelho. O backup em arquivo é a sua garantia contra perda e a forma de levar o plano para outro aparelho.</div>
+        <div class="data-safety-slot"></div>
+        <div class="card-actions no-pdf" style="padding-top:12px"><button class="btn-small primary" id="btnBackupOpen" type="button" hidden>Salvar backup agora (.json)</button></div>
+      </div>
+    </section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= DIAGNÓSTICO ======================= -->
+<div class="pane pane-scroll" id="pane-diag">
+  <div class="sheet narrow" id="sheetDiag">
+    <div class="masthead">
+      <div><h2>Diagnóstico financeiro</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfDiag" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Como usar.</b> Cadastre ativos, dívidas e o fluxo de caixa da família. Cada dado leva um rótulo de qualidade (confirmada, declarada, estimada ou pendente) e o relatório mostra essas limitações. As faixas dos indicadores são pontos de partida educativos: ajuste-as ao cliente.</div>
+    <div id="diagBanner"></div>
+
+    <section class="block keep"><div class="eyebrow"><span>Panorama</span></div><div class="kpi-row" id="diagKpis"></div></section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Balanço patrimonial</span></div>
+      <div class="form-card"><h3>Ativos</h3><div id="bsAssetsRows"></div><div class="card-actions no-pdf"><button class="btn-add" id="addBsAsset" type="button">+ Ativo</button></div></div>
+      <div class="form-card"><h3>Passivos</h3><div id="bsLiabRows"></div><div class="card-actions no-pdf"><button class="btn-add" id="addBsLiab" type="button">+ Dívida</button></div></div>
+      <div id="bsResult"></div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Fluxo de caixa normalizado</span></div>
+      <div class="form-card"><h3>Receitas e despesas</h3><div class="card-hint">Informe cada item com sua periodicidade; o sistema converte tudo para base mensal. Itens extraordinários ficam fora do superávit recorrente. As prestações de dívida vêm do cadastro de passivos.</div><div id="flowRows"></div><div class="card-actions no-pdf"><button class="btn-add" id="addFlow" type="button">+ Receita ou despesa</button></div></div>
+      <div id="flowResult"></div>
+    </section>
+
+    <section class="block keep">
+      <div class="eyebrow"><span>Reserva de contingência</span></div>
+      <div class="form-card no-pdf">
+        <h3>Dimensionamento</h3>
+        <div class="card-hint">Reserva-alvo = despesa essencial mensal × meses de cobertura + choques previsíveis. Os meses partem de 3 e sobem conforme os fatores de risco abaixo (acréscimos de 1 a 2 meses são uma heurística deste sistema, não um padrão); ajuste manualmente se o caso pedir.</div>
+        <div class="frow"><div class="fl">Fatores de risco do cliente<small>Marque os que se aplicam.</small></div>
+          <div class="fi" style="width:auto;display:grid;gap:6px;justify-items:start">
+            <label class="switch-row"><input type="checkbox" data-path="diag.risk.variable"><span>Renda variável (+2 meses)</span></label>
+            <label class="switch-row"><input type="checkbox" data-path="diag.risk.single"><span>Único provedor da renda (+2)</span></label>
+            <label class="switch-row"><input type="checkbox" data-path="diag.risk.dependents"><span>Dependentes (+1)</span></label>
+            <label class="switch-row"><input type="checkbox" data-path="diag.risk.health"><span>Condição de saúde relevante (+1)</span></label>
+            <label class="switch-row"><input type="checkbox" data-path="diag.risk.lowEmploy"><span>Recolocação difícil (+1)</span></label>
+          </div></div>
+        <div class="frow"><div class="fl">Meses de cobertura (ajuste manual)<small id="monthsHint">Em branco: usa o valor calculado.</small></div><div class="fi"><input type="number" min="0" max="60" step="0.5" data-path="diag.monthsOverride" data-nullable="1" placeholder="Calculado"></div></div>
+        <div class="frow"><div class="fl">Choques previsíveis<small>Franquias, seguro do carro, mensalidade escolar a vencer etc.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="diag.shocks" data-money="1"></div></div>
+      </div>
+      <div id="reserveResult"></div>
+    </section>
+
+    <section class="block keep">
+      <div class="eyebrow"><span>Indicadores</span></div>
+      <div class="ind-grid" id="indGrid"></div>
+      <details class="grp no-pdf" style="margin-top:12px;border-top:none"><summary><span class="grp-title">Faixas de atenção (editáveis)</span></summary>
+        <div class="card-hint" style="padding-top:8px">Pontos de partida educativos, não prescrição. Ajuste ao cliente. Fora da faixa em até 25% = atenção; além disso = fora da faixa.</div>
+        <div class="field-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));padding:6px 0 4px">
+          <div class="field"><label>Taxa de aporte (mín. %)</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="diag.targets.savings" data-pct="1"></div></div>
+          <div class="field"><label>Dívidas na renda (máx. %)</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="diag.targets.debtLoad" data-pct="1"></div></div>
+          <div class="field"><label>Alavancagem (máx. %)</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="diag.targets.leverage" data-pct="1"></div></div>
+          <div class="field"><label>Solvência (mín. %)</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="diag.targets.solvency" data-pct="1"></div></div>
+          <div class="field"><label>Concentração (máx. %)</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="diag.targets.concentration" data-pct="1"></div></div>
+        </div>
+      </details>
+    </section>
+
+    <section class="block keep">
+      <div class="eyebrow"><span>Qualidade dos dados</span></div>
+      <div class="form-card">
+        <h3>Dados críticos do plano de aposentadoria</h3>
+        <div class="card-hint">Marque o grau de confiança de cada dado usado nas projeções. As linhas do balanço e do fluxo têm o próprio rótulo.</div>
+        <div class="qual-grid" id="qualGrid"></div>
+        <div id="qualitySummary"></div>
+      </div>
+    </section>
+
+    <section class="block no-pdf">
+      <div class="eyebrow"><span>Integração com a Aposentadoria</span></div>
+      <div class="form-card" style="padding-bottom:14px"><h3>Levar os dados do diagnóstico para o plano</h3><div class="card-hint">A reserva de emergência e os recursos de outros objetivos não entram no capital da aposentadoria. O aporte realizado não é alterado: capacidade de poupança e aporte são coisas distintas.</div><div id="syncBox"></div></div>
+    </section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= ABA 1 · APOSENTADORIA ======================= -->
+<div class="pane active" id="pane-apos">
+<div class="app-shell">
+  <aside class="rail" id="rail">
+    <p class="rail-sub" style="margin-top:0">Seus dados ficam só neste navegador (armazenamento local); nada é enviado a servidores. Use identificadores em vez do nome completo se preferir.</p>
+
+    <details class="grp" open>
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="clock"></span>Cliente &amp; linha do tempo</span></summary>
+      <div class="grp-body">
+        <div class="field">
+          <label>Cliente (opcional)</label>
+          <input type="text" data-path="client.name" placeholder="Ex.: Cliente A" maxlength="80" autocomplete="off">
+        </div>
+        <div class="field-row three">
+          <div class="field"><label>Idade atual</label><input type="number" min="18" max="100" data-path="profile.currentAge"></div>
+          <div class="field"><label>Aposentadoria</label><input type="number" min="19" max="110" data-path="profile.retireAge"></div>
+          <div class="field"><label>Expectativa (até)</label><input type="number" min="50" max="120" data-path="profile.horizonAge"></div>
+        </div>
+        <div id="timelineViz"></div>
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="wealth"></span>Patrimônio</span></summary>
+      <div class="grp-body">
+        <div class="field">
+          <label>Patrimônio imobilizado <span style="color:var(--ink-muted); font-weight:400;">(imóveis, veículos, negócios)</span></label>
+          <div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="assets.illiquid" data-money="1"></div>
+        </div>
+        <div class="field">
+          <label>Recursos financeiros <span style="color:var(--ink-muted); font-weight:400;">(reserva líquida investida hoje)</span></label>
+          <div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="assets.liquid" data-money="1"></div>
+        </div>
+        <div class="field">
+          <label>Dívidas <span style="color:var(--ink-muted); font-weight:400;">(saldo devedor total)</span></label>
+          <div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="assets.debts" data-money="1"></div>
+          <div class="hint">Usado só no patrimônio líquido. As parcelas entram como retiradas mensais extras.</div>
+        </div>
+        <div class="field">
+          <label>Valorização real anual do imobilizado</label>
+          <div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="assets.illiquidRealGrowth" data-pct="1"></div>
+          <div class="hint">0% = o imóvel só acompanha a inflação. Usado para estimar o legado.</div>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="rates"></span>Premissas econômicas</span></summary>
+      <div class="grp-body">
+        <div class="field-row">
+          <div class="field"><label>Retorno nominal líquido a.a.</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="rates.nominal" data-pct="1"></div></div>
+          <div class="field"><label>Inflação (IPCA) a.a.</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="rates.inflation" data-pct="1"></div></div>
+        </div>
+        <div class="hint" style="margin-top:-4px">Informe o retorno já descontados taxas, custos e IR. Veja o teste de sensibilidade no relatório.</div>
+        <div class="real-rate-note" id="realRateNote"></div>
+        <label class="switch-row"><input type="checkbox" data-path="rates.differentiate" id="differentiateChk"><span>Usar taxas diferentes após a aposentadoria</span></label>
+        <div class="field-row" id="postRatesRow" style="display:none;">
+          <div class="field"><label>Retorno nominal pós a.a.</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="rates.nominalPost" data-pct="1"></div></div>
+          <div class="field"><label>Inflação pós a.a.</label><div class="suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="rates.inflationPost" data-pct="1"></div></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="cashflow"></span>Fluxo de caixa &amp; objetivo</span></summary>
+      <div class="grp-body">
+        <div class="field-row">
+          <div class="field"><label>Receita mensal</label><div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="cashflow.income" data-money="1"></div></div>
+          <div class="field"><label>Despesa mensal</label><div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="cashflow.expense" data-money="1"></div></div>
+        </div>
+        <div class="hint" id="capacityNote"></div>
+        <div class="field">
+          <label>Aporte mensal efetivamente realizado</label>
+          <div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="cashflow.executed" data-money="1"></div>
+          <div class="hint">Capacidade de poupança não é aporte. Informe o que de fato é investido todo mês.</div>
+        </div>
+        <div class="field">
+          <label>Padrão de vida desejado na aposentadoria <span style="color:var(--ink-muted); font-weight:400;">(gasto mensal, em R$ de hoje)</span></label>
+          <div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="cashflow.desiredWithdrawal" data-money="1"></div>
+        </div>
+        <div class="field">
+          <label>Legado financeiro mínimo <span id="minLegacyHint" style="color:var(--ink-muted); font-weight:400;">(R$ de hoje)</span></label>
+          <div class="prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="cashflow.minLegacy" data-money="1"></div>
+        </div>
+        <label class="switch-row"><input type="checkbox" data-path="cashflow.escalate"><span>Reajustar aportes, retiradas e eventos pela inflação</span></label>
+        <div class="hint" style="margin-top:-6px">Desmarcar significa valores fixos em R$ nominais: o poder de compra encolhe a cada ano.</div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="income"></span>Renda na aposentadoria</span></summary>
+      <div class="grp-body">
+        <div class="hint">INSS/RPPS, previdência privada em renda, aluguéis e outras rendas que reduzem o saque da reserva. Informe em R$ de hoje (assume-se que acompanham a inflação).</div>
+        <div class="row-table" id="retIncomeTable"></div>
+        <button class="btn-add" id="addIncomeRow" type="button">+ Renda na aposentadoria</button>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="monthly"></span>Aportes/retiradas mensais extras</span></summary>
+      <div class="grp-body">
+        <div class="hint">Valem entre duas idades, antes ou depois da aposentadoria. Use valor negativo para retiradas planejadas (ex.: estudo dos filhos, saúde, parcelas).</div>
+        <div class="row-table" id="extraMonthlyTable"></div>
+        <button class="btn-add" id="addMonthlyRow" type="button">+ Aporte/retirada mensal</button>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="annual"></span>Eventos anuais ou únicos</span></summary>
+      <div class="grp-body">
+        <div class="hint">Ex.: venda de imóvel, herança, 13º. Deixe "até idade" vazio para um evento único. Valem em qualquer idade, inclusive na aposentadoria.</div>
+        <div class="row-table" id="extraAnnualTable"></div>
+        <button class="btn-add" id="addAnnualRow" type="button">+ Evento anual/único</button>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="rates"></span>Cenários de estresse</span></summary>
+      <div class="grp-body">
+        <div class="hint">Parâmetros ilustrativos, aplicados um cenário por vez sobre o plano atual. Ajuste ao cliente. Não são previsão.</div>
+        <div id="stressForm"></div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary><span class="grp-title"><span class="grp-icon" data-icon="backup"></span>Backup e privacidade</span></summary>
+      <div class="grp-body backup-area">
+        <div class="data-safety-slot"></div>
+        <div class="banner warn" style="margin:0">O backup contém toda a situação financeira (inclusive as versões salvas) em texto aberto. Não envie por e-mail ou mensageiro.</div>
+        <div class="btn-line">
+          <button class="btn-small primary" id="btnExportFile" type="button">Salvar backup (.json)</button>
+          <button class="btn-small" id="btnReset" type="button">Usar exemplo</button>
+        </div>
+        <div class="field">
+          <label>Ou copie o texto do backup</label>
+          <textarea id="backupExport" readonly></textarea>
+        </div>
+        <div class="field">
+          <label>Colar para restaurar</label>
+          <textarea id="backupImport" placeholder="Cole aqui um backup exportado anteriormente"></textarea>
+        </div>
+        <div class="btn-line">
+          <button class="btn-small primary" id="btnImport" type="button">Restaurar backup</button>
+          <button class="btn-danger" id="btnWipe" type="button">Apagar todos os dados</button>
+        </div>
+        <div class="save-indicator" id="saveIndicator"></div>
+      </div>
+    </details>
+  </aside>
+
+  <main class="canvas">
+    <div class="sheet" id="sheetApos">
+      <div class="masthead">
+        <div>
+          <h2>Estimativa preliminar de aposentadoria</h2>
+          <div class="client" id="clientLine">—</div>
+        </div>
+        <div class="prepared">Elaborado em <b id="todayDate">—</b><br>Modelo determinístico · R$ de hoje<div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfApos" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+      </div>
+
+      <div id="validationBanner"></div>
+      <div id="qualityBanner"></div>
+
+      <section class="block keep">
+        <div class="eyebrow"><span>Panorama</span></div>
+        <div class="kpi-row">
+          <div class="stat-tile"><div class="tile-head"><span class="tile-icon" data-icon="wealth"></span><div class="label">Patrimônio líquido hoje</div></div><div class="value" id="kpiTotal">—</div><div class="sub" id="kpiTotalSub"></div></div>
+          <div class="stat-tile"><div class="tile-head"><span class="tile-icon" data-icon="reserve"></span><div class="label">Reserva financeira hoje</div></div><div class="value" id="kpiReserve">—</div><div class="sub">Projeção até a aposentadoria</div><div class="tile-spark" id="reserveSpark"></div></div>
+          <div class="stat-tile"><div class="tile-head"><span class="tile-icon" data-icon="clock"></span><div class="label">Anos até aposentar</div></div><div class="value" id="kpiYearsToRetire">—</div><div class="sub" id="kpiYearsToRetireSub"></div></div>
+          <div class="stat-tile"><div class="tile-head"><span class="tile-icon" data-icon="cashflow"></span><div class="label">Aporte mensal realizado</div></div><div class="value" id="kpiCapacity">—</div><div class="sub" id="kpiCapacitySub"></div></div>
+        </div>
+      </section>
+
+      <section class="block keep">
+        <div class="eyebrow"><span>Composição patrimonial</span></div>
+        <div class="split-row">
+          <div class="timeline-box">
+            <div class="timeline-title">Alocação atual dos ativos</div>
+            <div class="allocation-row">
+              <div class="donut-wrap"><canvas id="allocDonut"></canvas><div class="donut-center"><span class="dc-label">Ativos</span><span class="dc-value" id="donutCenterValue">—</span></div></div>
+              <div class="allocation-legend" id="allocLegend"></div>
+            </div>
+          </div>
+          <div class="timeline-box">
+            <div class="timeline-title">Linha do tempo</div>
+            <div id="timelineBig"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="keep"><div class="eyebrow"><span>Estratégias possíveis</span></div>
+        <div class="card-pair" id="strategyCards"></div></div>
+        <div class="mini-bar-section" id="miniBarSection"></div>
+        <div class="sens-wrap" id="sensSection"></div>
+      </section>
+
+      <section class="block keep">
+        <div class="eyebrow"><span>Testes de estresse</span></div>
+        <div class="sens-wrap" id="stressSection" style="margin-top:0"></div>
+      </section>
+
+      <section class="block">
+        <div class="keep"><div class="eyebrow"><span>Gasto por fases da aposentadoria</span></div>
+        <div class="form-card">
+          <h3>Fases</h3>
+          <div class="card-hint">O gasto não é constante: costuma cair com a idade e subir com a saúde no fim da vida. Cada linha vale <b>a partir</b> da idade informada: % do padrão de vida desejado, mais um custo extra de saúde (R$ de hoje por mês). O exemplo é ponto de partida para calibrar com o cliente, não uma regra.</div>
+          <label class="switch-row no-pdf" style="padding:8px 0"><input type="checkbox" data-path="phases.on"><span>Usar o gasto por fases no cálculo da aposentadoria</span></label>
+          <div id="phaseRows"></div>
+          <div class="card-actions no-pdf"><button class="btn-add" id="addPhase" type="button">+ Fase</button><button class="btn-add" id="addPhaseEx" type="button">Usar exemplo</button></div>
+        </div></div>
+        <div id="phaseResult"></div>
+      </section>
+
+      <section class="block">
+        <div class="keep"><div class="eyebrow"><span>IR sobre o resgate</span></div>
+        <div class="form-card">
+          <h3>Onde está o capital da aposentadoria</h3>
+          <div class="card-hint">O IR depende do tipo de aplicação: PGBL é tributado sobre o valor total; VGBL e investimentos tributáveis, só sobre o ganho; alguns ativos são isentos. Informe a distribuição para estimar a alíquota efetiva dos saques. É uma <b>estimativa</b>: a tabela regressiva usa o tempo médio de aplicação e a progressiva usa a tabela mensal sem o redutor da Lei 15.270; confirme com a Receita e com o contador.</div>
+          <label class="switch-row no-pdf" style="padding:8px 0"><input type="checkbox" data-path="retTax.on"><span>Aplicar o IR efetivo aos saques no cálculo da aposentadoria</span></label>
+          <div class="frow no-pdf"><div class="fl">Alíquota efetiva manual<small>Em branco: calculada pela estrutura abaixo. Se preencher, substitui o cálculo.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="retTax.manual" data-pct="1" data-nullable="1" placeholder="Automática"></div></div>
+          <div id="taxRows"></div>
+          <div class="card-actions no-pdf"><button class="btn-add" id="addTax" type="button">+ Linha</button><button class="btn-add" id="fillTax" type="button">Preencher a partir do Diagnóstico</button></div>
+        </div></div>
+        <div id="taxResult"></div>
+      </section>
+
+      <section class="block">
+        <div class="keep"><div class="eyebrow"><span>Cenários simulados (Monte Carlo)</span></div>
+        <div class="form-card no-pdf">
+          <h3>Premissas da simulação</h3>
+          <div class="card-hint"><b>Leia antes:</b> isto não é probabilidade de sucesso nem previsão. Mostra a <b>faixa de resultados</b> que as premissas abaixo produzem quando os retornos oscilam de mês a mês. Volatilidade e tipo de distribuição são hipóteses que ninguém conhece com precisão, e a faixa muda muito com elas: por isso a seção mostra também o que acontece quando essas premissas mudam.</div>
+          <div class="frow"><div class="fl">Volatilidade anual do retorno real<small>Desvio-padrão dos retornos. Carteiras de renda fixa pós ficam perto de 2% a 4%; carteiras com renda variável, de 10% a 20% (valores de referência, não regras).</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="mc.vol" data-pct="1"></div></div>
+          <div class="frow"><div class="fl">Distribuição dos retornos<small>Caudas pesadas dão mais peso a meses extremos, com a mesma volatilidade.</small></div><div class="fi" style="width:230px"><select data-path="mc.dist"><option value="normal">Normal</option><option value="tstudent">Caudas pesadas (t de Student, 4 g.l.)</option></select></div></div>
+          <div class="frow"><div class="fl">Plano simulado<small>Qual aporte e qual gasto entram na simulação.</small></div><div class="fi" style="width:230px"><select data-path="mc.scenario"><option value="atual">Plano atual (aporte realizado)</option><option value="consumir">Com o aporte adicional que consome a reserva</option></select></div></div>
+          <div class="frow"><div class="fl">Número de cenários simulados<small>Mais cenários suavizam a faixa; não mudam a premissa.</small></div><div class="fi"><select data-path="mc.sims" data-num="1"><option value="500">500</option><option value="1000">1.000</option><option value="2000">2.000</option><option value="5000">5.000</option><option value="10000">10.000</option></select></div></div>
+          <div class="frow"><div class="fl">Amostra (semente)<small>A mesma semente repete exatamente o resultado.</small></div><div class="fi" style="display:flex;gap:8px;width:230px"><input type="number" min="1" step="1" data-path="mc.seed" style="text-align:right"><button class="btn-small" id="mcReseed" type="button" style="white-space:nowrap">Sortear outra</button></div></div>
+        </div></div>
+        <div id="mcResult"></div>
+      </section>
+
+      <section class="block keep">
+        <div class="eyebrow"><span>Projeção da reserva</span></div>
+        <div class="chart-panel">
+          <div class="chart-panel-head">
+            <div>
+              <h3>Trajetória da reserva financeira</h3>
+              <div class="chart-caption" id="chartCaption">Valores em R$ de hoje (poder de compra constante). A faixa clara à esquerda é a fase de acumulação; a faixa à direita, a aposentadoria.</div>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="mainChart"></canvas></div>
+          <div class="manual-legend">
+            <span class="li"><span class="sw fillbox" style="background:var(--status-critical-wash); box-shadow:inset 0 0 0 1px var(--status-critical);"></span>Déficit projetado (sem novos aportes)</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="eyebrow"><span>Evolução ano a ano</span></div>
+        <div class="table-panel">
+          <div class="table-panel-head">
+            <h3>Ledger da reserva financeira</h3>
+            <div class="scenario-select no-pdf">
+              <label for="scenarioPick">Cenário:</label>
+              <select id="scenarioPick">
+                <option value="consume">Plano: Consumir Reserva</option>
+                <option value="preserve">Plano: Preservar Reserva</option>
+                <option value="none">Sem novos aportes</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-scroll"><table class="ledger" id="ledgerTable"></table></div>
+          <div class="ledger-note" id="ledgerNote"></div>
+        </div>
+      </section>
+
+      <footer class="methodology">
+        <b>Metodologia.</b> A taxa real é obtida pela equação de Fisher — (1+juros)/(1+inflação)−1 — e todos os fluxos são simulados mês a mês em poder de compra constante (R$ de hoje). “Consumir a Reserva” esgota o patrimônio financeiro (respeitado o legado mínimo) até a idade-limite; “Preservar a Reserva” mantém o valor real da reserva de aposentadoria. O <b>índice de cobertura</b> compara o padrão de vida que o patrimônio projetado sustenta com o desejado; ele <b>não é uma probabilidade de sucesso</b>. O modelo principal usa taxa constante; a seção “Cenários simulados” mostra faixas de resultado sob premissas explícitas de volatilidade, sem calcular probabilidade de sucesso. O IR sobre os saques só é considerado se a seção “IR sobre o resgate” estiver ativada, custos de transação não entram, e tudo depende das premissas informadas — por isso o relatório traz o teste de sensibilidade.
+      </footer>
+      <div class="disclaimer-slot"></div>
+    </div>
+  </main>
+</div>
+</div>
+
+<!-- ======================= OBJETIVOS ======================= -->
+<div class="pane pane-scroll" id="pane-obj">
+  <div class="sheet narrow" id="sheetObj">
+    <div class="masthead">
+      <div><h2>Objetivos de vida</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfObj" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Como funciona.</b> Cada meta tem um valor em R$ de hoje e uma data. O sistema calcula o aporte mensal necessário (também em valor real, reajustado pela inflação), desconta o que já foi reservado e distribui os recursos livres por prioridade. É planejamento: não indica onde investir.</div>
+    <div id="objBanner"></div>
+
+    <section class="block keep"><div class="eyebrow"><span>Panorama</span></div><div class="kpi-row" id="objKpis"></div></section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Metas</span></div>
+      <div class="form-card">
+        <h3>Cadastro de metas</h3>
+        <div class="card-hint">Valor em R$ de hoje; o ano vale a partir de 1º de janeiro. “Já reservado” é o que existe hoje separado para a meta (o balanço do Diagnóstico deve ter o mesmo valor com a finalidade “Outros objetivos”).</div>
+        <div id="goalRows"></div>
+        <div class="card-actions no-pdf"><button class="btn-add" id="addGoal" type="button">+ Meta</button></div>
+        <div class="frow no-pdf"><div class="fl">Retorno real esperado para metas<small>% a.a. acima da inflação. Prazos curtos pedem hipótese conservadora; cada meta pode ter a própria.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="goalsCfg.realReturn" data-pct="1"></div></div>
+      </div>
+    </section>
+
+    <section class="block keep"><div class="eyebrow"><span>Resultado por meta</span></div><div id="goalResult"></div></section>
+
+    <section class="block keep">
+      <div class="eyebrow"><span>Mapa de metas</span></div>
+      <div class="chart-box"><h3>Quando cada meta precisa estar pronta</h3><div class="sub">Da data de hoje até o ano-alvo; a cor mostra se há recursos para financiá-la.</div><div class="cv" id="goalsCv"><canvas id="chartGoals"></canvas></div></div>
+    </section>
+
+    <section class="block keep"><div class="eyebrow"><span>De onde saem os recursos</span></div><div id="goalFunding"></div></section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= CAIXA E DÍVIDAS ======================= -->
+<div class="pane pane-scroll" id="pane-cx">
+  <div class="sheet narrow" id="sheetCx">
+    <div class="masthead">
+      <div><h2>Caixa e dívidas</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfCx" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Como funciona.</b> As dívidas vêm do cadastro de passivos do Diagnóstico. Aqui você compara estratégias de quitação, decide entre amortizar ou investir e vê em que ordem usar o superávit. Os cálculos são nominais e não incluem multas, tarifas nem o valor da liquidez perdida: confirme com o contrato.</div>
+    <div id="cxBanner"></div>
+
+    <section class="block keep"><div class="eyebrow"><span>Panorama</span></div><div class="kpi-row" id="cxKpis"></div></section>
+
+    <section class="block keep"><div class="eyebrow"><span>Ordem de uso do superávit</span></div><div id="cxCascade"></div></section>
+
+    <section class="block">
+      <div class="keep"><div class="eyebrow"><span>Dívidas cadastradas</span></div>
+      <div id="cxDebtTable"></div></div>
+      <div class="card-actions no-pdf"><button class="btn-add" id="goDiag" type="button">Editar dívidas no Diagnóstico</button></div>
+    </section>
+
+    <section class="block">
+      <div class="keep"><div class="eyebrow"><span>Estratégias de quitação</span></div>
+      <div class="form-card no-pdf">
+        <h3>Premissas</h3>
+        <div class="frow"><div class="fl">Recurso extra mensal para dívidas<small>Valor novo, além das prestações. As prestações de dívidas quitadas também são redirecionadas.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="debtPlan.extra" data-money="1"></div></div>
+        <div class="frow"><div class="fl">Estratégia destacada</div><div class="fi" style="width:260px"><select data-path="debtPlan.strategy"><option value="avalanche">Avalanche (maior custo primeiro)</option><option value="bola">Bola de neve (menor saldo primeiro)</option><option value="fluxo">Fluxo de caixa (maior alívio mensal)</option></select></div></div>
+        <div class="frow"><div class="fl">Retorno líquido da alternativa de investimento<small id="altHint">% a.a. nominal, já líquido de IR e custos. Em branco: usa 85% do retorno nominal das premissas.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="debtPlan.altReturn" data-pct="1" data-nullable="1" placeholder="Automático"></div></div>
+      </div>
+      <div id="cxCompare"></div></div>
+      <div class="chart-box keep"><h3>Saldo devedor total ao longo do tempo</h3><div class="sub">Cada linha é uma estratégia com o mesmo recurso extra.</div><div class="cv"><canvas id="chartDebt"></canvas></div></div>
+    </section>
+
+    <section class="block">
+      <div class="keep"><div class="eyebrow"><span>Amortizar ou investir?</span></div>
+      <div class="form-card no-pdf">
+        <h3>Valor disponível</h3>
+        <div class="frow"><div class="fl">Dívida</div><div class="fi" style="width:260px"><select id="aoiPick"></select></div></div>
+        <div class="frow"><div class="fl">Valor para amortizar ou investir<small>Reserva de contingência completa e sem multa de quitação antecipada são pré-requisitos.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="debtPlan.lump" data-money="1"></div></div>
+      </div>
+      <div id="cxAoi"></div></div>
+    </section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= PROTEÇÃO ======================= -->
+<div class="pane pane-scroll" id="pane-prot">
+  <div class="sheet narrow" id="sheetProt">
+    <div class="masthead">
+      <div><h2>Proteção da família</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfProt" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Como funciona.</b> Método da necessidade: soma o que a família precisaria ter em caso de morte ou invalidez e desconta o que já existe. O resultado é um <b>capital necessário</b>, não a indicação de um produto. A escolha e a contratação de qualquer cobertura exigem profissional habilitado (corretor de seguros).</div>
+
+    <div class="sticky-sum no-pdf" id="protSticky"></div>
+    <div class="form-card no-pdf">
+      <h3>Família e sustento</h3>
+      <div class="frow"><div class="fl">Dependentes<small>Informativo; os anos de sustento abaixo definem o cálculo.</small></div><div class="fi"><input type="number" min="0" max="20" data-path="protect.deps"></div></div>
+      <div class="frow"><div class="fl">Anos de sustento da família<small>Até a independência financeira dos dependentes.</small></div><div class="fi"><input type="number" min="0" max="60" data-path="protect.supportYears"></div></div>
+      <div class="frow"><div class="fl">Renda líquida do cônjuge ou de quem fica<small>R$ por mês, em valor de hoje.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="protect.survivorIncome" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Custo de vida mantido após a morte<small>% da despesa atual do Diagnóstico (a parte pessoal de quem falece deixa de existir).</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="protect.needPct" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Pensão por morte e outros benefícios<small>R$/mês estimados. Confirme valor e regras no INSS ou no regime próprio.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="protect.pension" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Custos finais fixos<small>Funeral, despesas imediatas.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="protect.finalFixed" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Inventário e impostos de transmissão<small>% do patrimônio líquido. Varia por estado e tipo de inventário; é estimativa.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="protect.estatePct" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Fundo de transição<small>Meses de despesa essencial para a família se reorganizar.</small></div><div class="fi"><input type="number" min="0" max="60" step="1" data-path="protect.transitionMonths"></div></div>
+      <label class="switch-row" style="padding:8px 0"><input type="checkbox" data-path="protect.debtsPaid"><span>Quitar todas as dívidas</span></label>
+      <label class="switch-row" style="padding:0 0 10px"><input type="checkbox" data-path="protect.includeEducation"><span>Incluir as metas de educação (aba Objetivos)</span></label>
+    </div>
+    <div class="form-card no-pdf">
+      <h3>Invalidez e recursos existentes</h3>
+      <div class="frow"><div class="fl">Benefício por incapacidade esperado<small>R$/mês (INSS ou outro regime), em valor de hoje.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="protect.disabPension" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Custos extras de cuidado e adaptação<small>R$/mês, além do custo de vida atual.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="protect.careMonthly" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Anos com custos de cuidado</div><div class="fi"><input type="number" min="0" max="60" data-path="protect.careYears"></div></div>
+      <div class="frow"><div class="fl">Cobertura já contratada: morte<small>Capital total de seguros e benefícios que pagam em caso de morte.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="protect.existingLife" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Cobertura já contratada: invalidez</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="protect.existingDisab" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Parcela da aposentadoria que a família poderia usar<small>0% preserva a carteira para a aposentadoria de quem fica.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="protect.usePct" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Taxa real para valor presente<small>% a.a. acima da inflação; use hipótese conservadora.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="protect.rate" data-pct="1"></div></div>
+    </div>
+
+    <section class="block keep"><div class="eyebrow"><span>Panorama</span></div><div class="kpi-row" id="protKpis"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Capital necessário</span></div><div id="protResult"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Premissas e limites</span></div><div id="protNotes"></div></section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= COMPROMISSO (IPS) ======================= -->
+<div class="pane pane-scroll" id="pane-ips">
+  <div class="sheet narrow" id="sheetIps">
+    <div class="masthead">
+      <div><h2>Compromisso de planejamento (IPS)</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfIps" type="button" hidden>Salvar documento (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>O que é este documento.</b> Um IPS de planejamento: reúne o diagnóstico, os objetivos, os compromissos que o cliente assume, as regras para decidir quando o plano muda e as responsabilidades de cada lado. <b>Não escolhe investimentos</b>: não traz alocação de ativos nem recomendação de valores mobiliários, que exigem autorização da CVM. Escolha cada item do que entra, revise com o cliente e registre o aceite.</div>
+    <div id="ipsWarnings" class="no-pdf"></div>
+
+    <div class="form-card no-pdf">
+      <h3>Parâmetros das regras de decisão</h3>
+      <div class="frow"><div class="fl">Revisar o plano a cada<small>Meses entre as revisões ordinárias.</small></div><div class="fi"><input type="number" min="3" max="60" data-path="ips.reviewMonths"></div></div>
+      <div class="frow"><div class="fl">Cobertura mínima da renda desejada<small>Abaixo disso o plano é revisto.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="ips.coverageMin" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Reserva mínima de contingência<small id="ipsReserveHint">Meses de despesas essenciais. Em branco: usa o valor calculado no Diagnóstico.</small></div><div class="fi"><input type="number" min="0" max="60" step="0.5" data-path="ips.reserveMonths" data-nullable="1" placeholder="Calculado"></div></div>
+      <div class="frow"><div class="fl">Gatilho de queda do patrimônio financeiro<small>Queda em 12 meses que aciona a regra de ajuste.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="ips.drawdownTrigger" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Corte nos gastos discricionários quando o gatilho for acionado</div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="ips.spendCut" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Eventos que exigem revisão fora do calendário</div><div class="fi" style="width:380px"><textarea rows="3" maxlength="600" data-path="ips.events"></textarea></div></div>
+      <div class="frow"><div class="fl">Observações do documento<small>Aparece no fim, antes das assinaturas.</small></div><div class="fi" style="width:380px"><textarea rows="2" maxlength="1000" data-path="ips.notes"></textarea></div></div>
+      <div id="ipsInvestForm">
+        <div class="frow"><div class="fl">Data do perfil de investidor<small>Com autorização da CVM: o perfil vale por até 24 meses.</small></div><div class="fi"><input type="date" data-path="ips.profileDate"></div></div>
+        <div class="frow"><div class="fl">Diretrizes de investimento<small>De responsabilidade do consultor autorizado; a ferramenta não as gera.</small></div><div class="fi" style="width:380px"><textarea rows="4" maxlength="2000" data-path="ips.investmentPolicy"></textarea></div></div>
+      </div>
+    </div>
+
+    <section class="block no-pdf">
+      <div class="eyebrow"><span>Compromissos</span></div>
+      <div class="form-card">
+        <div class="card-hint">Marque os compromissos que o cliente decidiu assumir; os desmarcados são opções e não entram no documento. Valor e prazo são editáveis. As sugestões nascem do diagnóstico e do plano.</div>
+        <div id="commitRows"></div>
+        <div class="card-actions"><button class="btn-add" id="addCommit" type="button">+ Compromisso</button><button class="btn-add" id="suggestCommit" type="button">Sugerir a partir do plano</button><button class="btn-add" id="refreshCommit" type="button">Atualizar valores</button><span class="toast" id="commitToast"></span></div>
+      </div>
+    </section>
+
+    <section class="block"><div class="eyebrow no-pdf"><span>O documento</span></div><div id="ipsDoc"></div></section>
+
+    <section class="block no-pdf">
+      <div class="eyebrow"><span>Aceite</span></div>
+      <div class="form-card" style="padding-bottom:14px"><div id="ipsAccept"></div></div>
+    </section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= VERSÕES ======================= -->
+<div class="pane pane-scroll" id="pane-ver">
+  <div class="sheet narrow" id="sheetVer">
+    <div class="masthead">
+      <div><h2>Versões do plano</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfVer" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Como funciona.</b> Salve uma fotografia completa do plano antes de mudar premissas ou depois de uma revisão com o cliente. Depois compare duas versões (ou uma versão com o plano atual): os indicadores são recalculados e a lista de premissas alteradas mostra o que explica a diferença. As versões ficam neste navegador e vão junto no backup.</div>
+
+    <div class="form-card no-pdf">
+      <h3>Salvar versão agora</h3>
+      <div class="frow"><div class="fl">Nome<small>Ex.: “Revisão anual 2026”, “Antes de vender o imóvel”.</small></div><div class="fi" style="width:300px"><input type="text" id="verName" maxlength="80" autocomplete="off" style="text-align:left"></div></div>
+      <div class="frow"><div class="fl">Observação (opcional)</div><div class="fi" style="width:300px"><input type="text" id="verNote" maxlength="400" autocomplete="off" style="text-align:left"></div></div>
+      <div class="card-actions"><button class="btn" id="btnVerSave" type="button">Salvar versão</button><span class="toast" id="verToast"></span></div>
+    </div>
+
+    <section class="block"><div class="eyebrow"><span>Versões salvas</span></div><div id="verList"></div></section>
+
+    <section class="block">
+      <div class="keep"><div class="eyebrow"><span>Comparar</span></div>
+      <div class="form-card no-pdf" style="padding-bottom:12px">
+        <div class="frow"><div class="fl">De (referência)</div><div class="fi" style="width:300px"><select id="verPickA"></select></div></div>
+        <div class="frow"><div class="fl">Para</div><div class="fi" style="width:300px"><select id="verPickB"></select></div></div>
+      </div>
+      <div id="verCompare"></div></div>
+    </section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= SUCESSÃO ======================= -->
+<div class="pane pane-scroll" id="pane-succ">
+  <div class="sheet narrow" id="sheetSucc">
+    <div class="masthead">
+      <div><h2>Liquidez para a sucessão</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfSucc" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Como funciona.</b> Estima quanto o inventário custaria e se a família teria caixa para pagá-lo sem vender bens às pressas. Contas e investimentos no nome de quem falece costumam ficar bloqueados até a autorização do inventário; por isso o que conta é a liquidez <b>fora</b> do inventário. É uma estimativa de ordem de grandeza. Regime de bens, ITCMD e honorários variam por estado e caso: confirme com um advogado. Testamento, doação e estruturas societárias são matéria jurídica e ficam fora deste cálculo.</div>
+    <div class="sticky-sum no-pdf" id="succSticky"></div>
+
+    <div class="form-card no-pdf">
+      <h3>Premissas</h3>
+      <div class="card-actions" style="padding-top:10px"><button class="btn-add" id="succPresetExtra" type="button">Valores típicos: inventário extrajudicial</button><button class="btn-add" id="succPresetJud" type="button">Valores típicos: inventário judicial</button><span class="toast" id="succToast"></span></div>
+      <label class="switch-row" style="padding:6px 0 10px"><input type="checkbox" data-path="succ.spouse"><span>Há cônjuge ou companheiro(a) sobrevivente</span></label>
+      <div class="frow"><div class="fl">Regime de bens<small>Define a meação: parte do patrimônio que já pertence ao cônjuge e não é herança.</small></div><div class="fi" style="width:260px"><select data-path="succ.regime"><option value="comunhao_parcial">Comunhão parcial de bens</option><option value="comunhao_universal">Comunhão universal de bens</option><option value="separacao">Separação de bens</option><option value="participacao">Participação final nos aquestos</option></select></div></div>
+      <div class="frow" id="succCommonRow"><div class="fl">Parcela do patrimônio adquirida em comum<small>% dos bens comprados durante o casamento (comunhão parcial). Bens anteriores, doados ou herdados ficam fora da meação.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.commonPct" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Herdeiros<small>Descendentes, ascendentes e cônjuge, quando herdeiros. Com herdeiros necessários, metade do patrimônio é indisponível (legítima).</small></div><div class="fi"><input type="number" min="0" max="30" data-path="succ.heirs"></div></div>
+      <div class="frow"><div class="fl">ITCMD<small>Imposto estadual sobre a herança. Em geral de 2% a 8%; a alíquota efetiva depende do estado e do valor.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.itcmd" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Honorários advocatícios<small>% do monte-mor.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.fees" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Custas, emolumentos e certidões<small>% do monte-mor.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="succ.costs" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Duração do inventário<small>Meses de custo de manutenção dos bens.</small></div><div class="fi"><input type="number" min="0" max="120" data-path="succ.months"></div></div>
+      <div class="frow"><div class="fl">Custo mensal de manter os bens<small>IPTU, condomínio, seguros e conservação dos imóveis durante o inventário (R$/mês).</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="succ.carry" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Previdência privada fora do inventário<small id="succPensionHint">Em branco: soma os ativos cujo nome indica PGBL, VGBL ou previdência.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="succ.pensionOverride" data-money="1" data-nullable="1" placeholder="Automático"></div></div>
+    </div>
+
+    <section class="block keep"><div class="eyebrow"><span>Panorama</span></div><div class="kpi-row" id="succKpis"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Do patrimônio ao inventário</span></div><div id="succFlow"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Custos e liquidez</span></div><div id="succCosts"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Se a alíquota do ITCMD for outra</span></div><div id="succSens"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Premissas e limites</span></div><div id="succNotes"></div></section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= ABA 2 · IRPF MENSAL ======================= -->
+<div class="pane pane-scroll" id="pane-irm">
+  <div class="sheet narrow" id="sheetIrm">
+    <div class="masthead">
+      <div><h2>IRPF mensal: retenção e carnê-leão</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared"><div class="actions no-pdf" style="justify-content:flex-end"><button class="btn ghost" id="btnPdfIrm" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info"><b>Simulação educativa.</b> Estima o imposto mensal sobre rendimentos tributáveis e o efeito do redutor da Lei 15.270/2025 (isenção efetiva até R$ 5.000/mês). Não considera 13º, PLR, dividendos nem outras regras específicas.</div>
+
+    <div class="form-card">
+      <h3>Tabela aplicada</h3>
+      <div class="frow"><div class="fl">Vigência<small>Escolha a tabela do período que está simulando.</small></div><div class="fi"><select data-path="irpf.vig" class="sel-vig"></select></div></div>
+    </div>
+
+    <div class="form-card">
+      <h3>Rendimentos e deduções do mês</h3>
+      <div class="frow"><div class="fl">Rendimentos tributáveis no mês</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.mensal.rend" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Previdência oficial (INSS/RPPS)</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.mensal.inss" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Dependentes<small id="depHintM"></small></div><div class="fi"><input type="number" min="0" max="20" data-path="irpf.mensal.dep"></div></div>
+      <div class="frow"><div class="fl">Pensão alimentícia (mensal)</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.mensal.pensao" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Outras deduções legais<small>Livro-caixa, previdência complementar PGBL na fonte etc.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.mensal.outras" data-money="1"></div></div>
+    </div>
+
+    <div id="irmResult"></div>
+    <div class="src" id="irmSrc"></div>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= ABA 3 · IRPF ANUAL & PGBL ======================= -->
+<div class="pane pane-scroll" id="pane-ira">
+  <div class="sheet narrow" id="sheetIra">
+    <div class="masthead">
+      <div><h2>Ajuste anual e benefício fiscal do PGBL</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared"><div class="actions no-pdf" style="justify-content:flex-end"><button class="btn ghost" id="btnPdfIra" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info"><b>Simulação educativa.</b> Compara o modelo simplificado, o completo e o completo com PGBL. O PGBL <b>adia</b> o imposto (ele é cobrado no resgate); não é lucro imediato. Veja a aba “PGBL no longo prazo” para o efeito líquido.</div>
+
+    <div class="form-card">
+      <h3>Tabela aplicada</h3>
+      <div class="frow"><div class="fl">Vigência<small>Ano-calendário da declaração simulada.</small></div><div class="fi"><select data-path="irpf.vig" class="sel-vig"></select></div></div>
+    </div>
+
+    <div class="form-card">
+      <h3>1. Rendimentos tributáveis do ano</h3>
+      <div class="frow"><div class="fl">Rendimentos anuais (salários, aluguéis etc.)</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.anual.rend" data-money="1"></div></div>
+    </div>
+
+    <div class="form-card">
+      <h3>2. Deduções legais (modelo completo)</h3>
+      <div class="frow"><div class="fl">Previdência oficial (INSS/RPPS)</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.anual.inss" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Dependentes<small id="depHintA"></small></div><div class="fi"><input type="number" min="0" max="20" data-path="irpf.anual.dep"></div></div>
+      <div class="frow"><div class="fl">Despesas com instrução<small id="instrHint"></small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.anual.instr" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Despesas médicas<small>Sem limite de dedução.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.anual.med" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Pensão alimentícia e outras</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.anual.outras" data-money="1"></div></div>
+    </div>
+
+    <div class="form-card">
+      <h3>3. Imposto retido e estratégia PGBL</h3>
+      <div class="frow"><div class="fl">Imposto já retido na fonte (IRRF) no ano</div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.anual.irrf" data-money="1"></div></div>
+      <div class="frow"><div class="fl">Aporte planejado em PGBL<small id="aporteHint">Em branco: usa o teto de 12% dos rendimentos tributáveis.</small></div><div class="fi prefix-wrap" data-prefix="R$"><input type="text" inputmode="decimal" data-path="irpf.anual.aporte" data-money="1" data-nullable="1" placeholder="Teto (12%)"></div></div>
+    </div>
+
+    <div id="iraBanners"></div>
+    <div id="iraResult"></div>
+    <div class="chart-box"><h3>Imposto devido por modelo</h3><div class="sub">O destaque marca o menor imposto entre os três cenários.</div><div class="cv"><canvas id="chartIra"></canvas></div></div>
+    <div class="src" id="iraSrc"></div>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= ABA 4 · PGBL NO LONGO PRAZO ======================= -->
+<div class="pane pane-scroll" id="pane-pgbl">
+  <div class="sheet narrow" id="sheetPgbl">
+    <div class="masthead">
+      <div><h2>PGBL × investimento comum no longo prazo</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared"><div class="actions no-pdf" style="justify-content:flex-end"><button class="btn ghost" id="btnPdfPgbl" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info"><b>Simulação educativa.</b> Compara o mesmo desembolso líquido: o PGBL recebe o aporte inteiro (a restituição devolve parte do valor); o investimento comum recebe só o desembolso líquido. O resgate considera o imposto de cada aporte pela tabela regressiva (PGBL) e pela regressiva de renda fixa (comum). Retorno constante, sem volatilidade.</div>
+
+    <div class="form-card">
+      <h3>Parâmetros da projeção</h3>
+      <div class="range-row"><label for="rg_renda">Renda bruta anual</label><input type="range" id="rg_renda" min="40000" max="800000" step="5000" data-path="irpf.proj.renda"><span class="rv" id="rv_renda"></span></div>
+      <div class="range-row"><label for="rg_pct">Aporte no PGBL (% da renda)</label><input type="range" id="rg_pct" min="1" max="12" step="0.5" data-path="irpf.proj.pct"><span class="rv" id="rv_pct"></span></div>
+      <div class="range-row"><label for="rg_cdi">Retorno bruto (CDI) % a.a.</label><input type="range" id="rg_cdi" min="5" max="16" step="0.5" data-path="irpf.proj.cdi"><span class="rv" id="rv_cdi"></span></div>
+      <div class="range-row"><label for="rg_taxa">Taxa de administração do PGBL % a.a.</label><input type="range" id="rg_taxa" min="0" max="3" step="0.25" data-path="irpf.proj.taxa"><span class="rv" id="rv_taxa"></span></div>
+      <div class="range-row"><label for="rg_anos">Anos de acumulação</label><input type="range" id="rg_anos" min="3" max="30" step="1" data-path="irpf.proj.anos"><span class="rv" id="rv_anos"></span></div>
+      <div class="range-row"><label for="sel_aliq">Alíquota marginal de IR do investidor</label><select id="sel_aliq" data-path="irpf.proj.aliq" data-num="1"><option value="0">Isento (0%)</option><option value="7.5">7,5%</option><option value="15">15%</option><option value="22.5">22,5%</option><option value="27.5">27,5%</option></select><span class="rv" id="rv_aliq" style="visibility:hidden">·</span></div>
+    </div>
+
+    <div id="pgBanner"></div>
+    <div class="kpi-row" id="pgMetrics" style="margin-bottom:14px"></div>
+
+    <div class="chart-box"><h3>Saldo líquido de IR se resgatado em cada ano</h3><div class="sub">Compara o que sobra no bolso depois do imposto, não o saldo bruto.</div><div class="cv"><canvas id="chartPgbl"></canvas></div></div>
+
+    <div class="form-card" style="padding-bottom:14px">
+      <h3>Resumo no prazo escolhido</h3>
+      <div class="table-scroll" style="margin-top:10px"><table class="cmp" id="pgCompare"></table></div>
+    </div>
+
+    <div class="form-card" style="padding-bottom:14px">
+      <h3>Ano a ano</h3>
+      <div class="table-scroll" style="margin-top:10px"><table class="cmp" id="pgTable"></table></div>
+    </div>
+    <div class="src">Premissas: aportes no início de cada ano e valor constante; retorno constante; PGBL tributado no resgate sobre o valor total pela tabela regressiva (35% até 2 anos … 10% acima de 10 anos) aplicada a cada aporte; investimento comum tributado só sobre o rendimento (17,5% até 1 ano, 15% depois), sem come-cotas. Não considera a progressividade da tabela do PGBL, o limite de dedução em anos futuros nem custos de corretagem.</div>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= DIAGNÓSTICO FINAL ======================= -->
+<div class="pane pane-scroll" id="pane-syn">
+  <div class="sheet narrow" id="sheetSyn">
+    <div class="masthead">
+      <div><h2>Diagnóstico final</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfSyn" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>O retrato de tudo o que foi visto.</b> Esta página junta os números de todas as etapas em um diagnóstico por área. Ela se atualiza sozinha; o que for decidido aqui vira o plano de ação e, depois, o compromisso do cliente.</div>
+    <section class="block keep"><div class="eyebrow"><span>Resumo</span></div><div id="synSummary"></div></section>
+    <section class="block"><div class="eyebrow"><span>Painel por área</span></div><div id="synAreas"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Decisões prioritárias</span></div><div id="synTop3"></div></section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<!-- ======================= PLANO DE AÇÃO ======================= -->
+<div class="pane pane-scroll" id="pane-plan">
+  <div class="sheet narrow" id="sheetPlan">
+    <div class="masthead">
+      <div><h2>Plano de ação e decisões</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfPlan" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>Recomendação sem execução é só análise.</b> Cada decisão vira uma ação com responsável, prazo, evidência e status. As sugestões abaixo nascem dos números do diagnóstico e da aposentadoria e tratam de planejamento (reserva, dívida, aporte, dados); não indicam produtos nem valores mobiliários.</div>
+
+    <section class="block keep"><div class="eyebrow"><span>Situação</span></div><div class="kpi-row" id="planKpis"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Três decisões prioritárias</span></div><div id="top3"></div></section>
+    <section class="block no-pdf"><div class="eyebrow"><span>Sugestões do sistema</span></div><div id="suggestBox"></div></section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Ações</span></div>
+      <div id="actionRows"></div>
+      <div class="card-actions no-pdf"><button class="btn-add" id="addAction" type="button">+ Ação</button></div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Memorandos de decisão</span></div>
+      <div class="card-hint" style="margin-bottom:8px">Registra por que cada decisão foi tomada: problema, evidência, alternativas, escolha, premissas, riscos e custo da inação.</div>
+      <div id="memoRows"></div>
+      <div class="card-actions no-pdf"><button class="btn-add" id="addMemo" type="button">+ Memorando em branco</button> <button class="btn-add" id="addMemoRet" type="button">+ Rascunho: aposentadoria</button> <span class="toast" id="memoToast"></span></div>
+    </section>
+
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
+<script src="assets/chart.umd.min.js"></script>
+<script src="assets/html2pdf.bundle.min.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
