@@ -1,7 +1,7 @@
 /* Service worker do Asset Planning. Gerado por build.py (BUILD_ID e lista de arquivos são substituídos).
    Estratégia: o app abre do cache (funciona sem internet); a página inicial tenta a rede primeiro para que
    uma nova versão publicada apareça assim que houver conexão. Nenhum dado de cliente passa por aqui. */
-const BUILD_ID = "99ab3deeb5";
+const BUILD_ID = "660de8bbea";
 const CACHE = "asset-planning-" + BUILD_ID;
 const SHELL = ["./", "index.html", "manifest.webmanifest", "assets/app.css", "assets/app.js", "assets/chart.umd.min.js", "assets/html2pdf.bundle.min.js", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png", "assets/fonts/fraunces-opsz.woff2", "assets/fonts/public-sans.woff2"];
 

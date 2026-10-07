@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const { go } = require('./nav.js');
 let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', n, x === undefined ? '' : x); } else console.log('ok  ', n, x === undefined ? '' : x); };
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
@@ -7,7 +8,7 @@ let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', 
   const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   let dialogs = 0; page.on('dialog', d => { dialogs++; d.dismiss(); });
   await page.goto('file://' + require('path').join(__dirname, '..', '..', 'dist', 'asset-planning.local.html')); await page.waitForTimeout(800);
-  const tab = async (t) => { await page.click('.tab[data-tab="' + t + '"]'); await page.waitForTimeout(350); };
+  const tab = async (t) => { await go(page, t, 350); };
   const txt = (sel) => page.$eval(sel, (e) => e.innerText);
   const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('asset-planning-v2')));
 

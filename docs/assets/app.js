@@ -28,7 +28,7 @@ const Engine = (function () {
 
   function defaultState() {
     return {
-      meta: { version: 5 },
+      meta: { version: 6 },
       client: { name: "" },
       profile: { currentAge: 45, retireAge: 65, horizonAge: 100 },
       assets: { illiquid: 1000000, liquid: 1000000, illiquidRealGrowth: 0, debts: 40000 },
@@ -93,6 +93,11 @@ const Engine = (function () {
         finalFixed: 20000, estatePct: 4, debtsPaid: true, transitionMonths: 6, includeEducation: true, existingLife: 0,
         disabPension: 0, careMonthly: 0, careYears: 20, existingDisab: 0, usePct: 0, rate: 3
       },
+      meeting: { date: "", participants: "", purpose: "", docs: { extratos: false, irpf: false, dividas: false, apolices: false, previdencia: false, imoveis: false, despesas: false, testamento: false },
+        seen: { open: false, diag: false, obj: false, cx: false, prot: false, apos: false, succ: false, irm: false, ira: false, pgbl: false, syn: false, plan: false, ips: false } },
+      risk: { tolerance: "", drawdown: 20, notes: "" },
+      ips: { status: "rascunho", acceptedOn: "", acceptedVersion: 0, reviewMonths: 12, coverageMin: 90, reserveMonths: null, drawdownTrigger: 20, spendCut: 10, events: "Mudança de emprego ou de renda; nascimento ou saída de dependente; herança, venda ou compra relevante de bens; separação ou falecimento; mudança relevante na legislação tributária.", profileDate: "", investmentPolicy: "", notes: "" },
+      commitments: [],
       mc: { sims: 2000, vol: 10, dist: "normal", seed: 1, scenario: "atual" },
       succ: { spouse: true, regime: "comunhao_parcial", commonPct: 100, heirs: 2, itcmd: 4, fees: 4, costs: 1.5, months: 6, carry: 1500, pensionOverride: null },
       versions: [],
@@ -117,7 +122,8 @@ const Engine = (function () {
     memos: { title: "", frame: "planejamento", problem: "", evidence: "", alternatives: "", chosen: "", assumptions: "", risks: "", inaction: "", owner: "", review: "", actionId: 0 },
     phaseRows: { ageFrom: 75, pct: 100, health: 0, label: "" },
     taxRows: { label: "", kind: "tributavel", value: 0, gainPct: 50, regime: "regressivo", years: 10, monthly: 0 },
-    goals: { label: "", kind: "outro", amount: 0, year: 0, priority: "importante", saved: 0, rate: null }
+    goals: { label: "", kind: "outro", amount: 0, year: 0, priority: "importante", saved: 0, rate: null },
+    commitments: { text: "", kind: "outro", value: 0, freq: "mensal", due: "", owner: "cliente", include: true, source: "" }
   };
   const QUALITY = ["confirmada", "declarada", "estimada", "pendente"];
   const ENUMS = {
@@ -129,12 +135,13 @@ const Engine = (function () {
     "actions.priority": ["critica", "alta", "media", "baixa"], "actions.owner": ["cliente", "planejador", "especialista"],
     "actions.status": ["nao_iniciada", "em_curso", "bloqueada", "concluida"], "memos.frame": ["planejamento", "valores_mobiliarios"],
     "taxRows.kind": ["pgbl", "vgbl", "tributavel", "isento"], "taxRows.regime": ["regressivo", "progressivo"],
+    "commitments.kind": ["aporte", "reserva", "divida", "meta", "protecao", "sucessao", "tributario", "dados", "comportamento", "outro"], "commitments.freq": ["mensal", "anual", "unico", "na"], "commitments.owner": ["cliente", "planejador", "especialista"],
     "goals.kind": ["educacao", "imovel", "veiculo", "viagem", "familia", "negocio", "saude", "outro"], "goals.priority": ["essencial", "importante", "desejo"]
   };
   const STRATEGIES = ["avalanche", "bola", "fluxo"];
   const MC_DISTS = ["normal", "tstudent"], MC_SCEN = ["atual", "consumir"], REGIMES = ["comunhao_parcial", "comunhao_universal", "separacao", "participacao"];
   const MAX_VERSIONS = 12;
-  const MAXLEN = { problem: 2000, evidence: 2000, alternatives: 2000, chosen: 2000, assumptions: 2000, risks: 2000, inaction: 1000, scope: 1000, fee: 500, conflicts: 1000, dep: 300, cost: 200, next: 400, title: 160 };
+  const MAXLEN = { text: 300, source: 60, participants: 300, purpose: 600, events: 600, investmentPolicy: 2000, notes: 1000, problem: 2000, evidence: 2000, alternatives: 2000, chosen: 2000, assumptions: 2000, risks: 2000, inaction: 1000, scope: 1000, fee: 500, conflicts: 1000, dep: 300, cost: 200, next: 400, title: 160 };
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
   function coerce(def, src, key) {
@@ -180,6 +187,17 @@ const Engine = (function () {
     Object.keys(out.quality).forEach(function (k) { if (QUALITY.indexOf(out.quality[k]) === -1) out.quality[k] = "declarada"; });
     if (["nao", "sim"].indexOf(out.pro.cvm) === -1) out.pro.cvm = "nao";
     if (STRATEGIES.indexOf(out.debtPlan.strategy) === -1) out.debtPlan.strategy = "avalanche";
+    if (["", "conservadora", "moderada", "arrojada"].indexOf(out.risk.tolerance) === -1) out.risk.tolerance = "";
+    out.risk.drawdown = Math.min(90, Math.max(0, out.risk.drawdown));
+    if (["rascunho", "aceito"].indexOf(out.ips.status) === -1) out.ips.status = "rascunho";
+    ["acceptedOn", "profileDate"].forEach(function (k) { if (out.ips[k] && !DATE_RE.test(out.ips[k])) out.ips[k] = ""; });
+    if (out.meeting.date && !DATE_RE.test(out.meeting.date)) out.meeting.date = "";
+    out.ips.acceptedVersion = Math.max(0, Math.round(out.ips.acceptedVersion) || 0);
+    out.ips.reviewMonths = Math.min(60, Math.max(3, Math.round(out.ips.reviewMonths) || 12));
+    out.ips.coverageMin = Math.min(200, Math.max(0, out.ips.coverageMin));
+    out.ips.drawdownTrigger = Math.min(80, Math.max(0, out.ips.drawdownTrigger));
+    out.ips.spendCut = Math.min(60, Math.max(0, out.ips.spendCut));
+    if (out.ips.reserveMonths != null) out.ips.reserveMonths = Math.min(60, Math.max(0, out.ips.reserveMonths));
     if (MC_DISTS.indexOf(out.mc.dist) === -1) out.mc.dist = "normal";
     if (MC_SCEN.indexOf(out.mc.scenario) === -1) out.mc.scenario = "atual";
     out.mc.sims = Math.min(10000, Math.max(200, Math.round(out.mc.sims) || 2000));
@@ -193,7 +211,7 @@ const Engine = (function () {
     out.succ.carry = Math.max(0, out.succ.carry);
     if (!(raw && raw.protect)) Object.assign(out.protect, { deps: 0, supportYears: 10, survivorIncome: 0, needPct: 75, pension: 0, finalFixed: 0, estatePct: 0, transitionMonths: 6, existingLife: 0, disabPension: 0, careMonthly: 0, existingDisab: 0, usePct: 0 }); // estado antigo: não injeta números de exemplo
     out.versions = sanitizeVersions(raw && raw.versions);
-    out.meta.version = 5;
+    out.meta.version = 6;
     return out;
   }
 
@@ -1400,7 +1418,8 @@ const Versions = (function (E, P, G, D, R, S) {
     ["goals", "Meta", [["amount", "valor", "money"], ["year", "ano", "int"], ["saved", "já reservado", "money"], ["priority", "prioridade", "text"]]],
     ["retIncome", "Renda na aposentadoria", [["value", "valor", "money"], ["ageFrom", "a partir da idade", "int"]]],
     ["phaseRows", "Fase de gasto", [["pct", "% do gasto", "pct"], ["health", "saúde extra", "money"]]],
-    ["taxRows", "Estrutura tributária", [["value", "valor", "money"], ["kind", "tipo", "text"], ["years", "anos", "int"]]]
+    ["taxRows", "Estrutura tributária", [["value", "valor", "money"], ["kind", "tipo", "text"], ["years", "anos", "int"]]],
+    ["commitments", "Compromisso", [["include", "incluído", "bool"], ["value", "valor", "money"], ["due", "prazo", "text"]], "text"]
   ];
   const get = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
   const same = (x, y) => (typeof x === "number" && typeof y === "number" ? Math.abs(x - y) < 1e-9 : x === y);
@@ -1413,14 +1432,14 @@ const Versions = (function (E, P, G, D, R, S) {
     });
     LISTS.forEach(function (L) {
       const la = get(sa, L[0]) || [], lb = get(sb, L[0]) || [];
-      const key = (r, i) => (r.label || ("#" + (i + 1))).trim().toLowerCase();
+      const kf = L[3] || "label", key = (r, i) => String(r[kf] || ("#" + (i + 1))).trim().toLowerCase().slice(0, 80);
       const ma = {}, mb = {};
       la.forEach((r, i) => { ma[key(r, i)] = r; }); lb.forEach((r, i) => { mb[key(r, i)] = r; });
       Object.keys(mb).forEach(function (k) {
-        if (!ma[k]) out.push({ group: L[1] + "s", label: L[1] + " adicionado(a): " + (mb[k].label || k), a: null, b: null, fmt: "text" });
-        else L[2].forEach(function (f) { if (!same(ma[k][f[0]], mb[k][f[0]])) out.push({ group: L[1] + "s", label: L[1] + " “" + (mb[k].label || k) + "”: " + f[1], a: ma[k][f[0]], b: mb[k][f[0]], fmt: f[2] }); });
+        if (!ma[k]) out.push({ group: L[1] + "s", label: L[1] + " adicionado(a): " + (mb[k][kf] || k), a: null, b: null, fmt: "text" });
+        else L[2].forEach(function (f) { if (!same(ma[k][f[0]], mb[k][f[0]])) out.push({ group: L[1] + "s", label: L[1] + " “" + (mb[k][kf] || k) + "”: " + f[1], a: ma[k][f[0]], b: mb[k][f[0]], fmt: f[2] }); });
       });
-      Object.keys(ma).forEach(function (k) { if (!mb[k]) out.push({ group: L[1] + "s", label: L[1] + " removido(a): " + (ma[k].label || k), a: null, b: null, fmt: "text" }); });
+      Object.keys(ma).forEach(function (k) { if (!mb[k]) out.push({ group: L[1] + "s", label: L[1] + " removido(a): " + (ma[k][kf] || k), a: null, b: null, fmt: "text" }); });
     });
     return out;
   }
@@ -1451,6 +1470,236 @@ const Versions = (function (E, P, G, D, R, S) {
 if (typeof module !== "undefined") module.exports = Versions;
 /* VERSIONS:END */
 
+/* SYNTHESIS:BEGIN — diagnóstico final por área, compromissos sugeridos e modelo do IPS de planejamento. Puro, sem DOM.
+   O IPS aqui é uma declaração de política e compromissos de PLANEJAMENTO: objetivos, metas de aporte, reserva, dívidas, regras de revisão
+   e responsabilidades. Não contém alocação de ativos nem recomendação de valores mobiliários (isso só cabe a quem tem autorização da CVM). */
+const Synthesis = (function (E, P, G, D, R, S, I) {
+  "use strict";
+
+  const num = (x) => (isFinite(x) ? x : 0);
+  const brl = (v) => (isFinite(v) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(Math.round(v) + 0) : "—");
+  const pct = (v, d) => (isFinite(v) ? new Intl.NumberFormat("pt-BR", { maximumFractionDigits: d == null ? 0 : d }).format(v) + "%" : "—");
+  const num1 = (v) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(v);
+  const SEV = { crit: 0, warn: 1, ok: 2, info: 3, na: 4 };
+  const fromInd = (st) => (st === "ok" ? "ok" : st === "warn" ? "warn" : st === "crit" ? "crit" : "na");
+
+  function isoPlusMonths(now, months) {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() + months, Math.min(now.getDate(), 28)));
+    return d.toISOString().slice(0, 10);
+  }
+
+  function context(s, now) {
+    now = now || new Date();
+    const bs = P.balanco(s), fl = P.fluxo(s, bs), rs = P.reserva(s, fl, bs);
+    const v = E.validate(s), an = v.errors.length ? null : E.analyze(s, 0);
+    const ind = P.indicadores(s, bs, fl, rs, an), q = P.quality(s);
+    const goals = G.analyze(s, fl, bs, now, an), prot = R.analyze(s, { fl: fl, bs: bs, goals: goals }), succ = S.analyze(s, { bs: bs });
+    const altNet = s.debtPlan.altReturn != null ? s.debtPlan.altReturn : s.rates.nominal * 0.85;
+    return { s: s, now: now, bs: bs, fl: fl, rs: rs, v: v, an: an, ind: ind, q: q, goals: goals, prot: prot, succ: succ, altNet: altNet,
+      liabs: s.diag.bsLiabilities.filter((l) => l.balance > 0), crise: an ? E.stress(s, s.stress.crise) : null };
+  }
+
+  /* ---------- diagnóstico por área ---------- */
+  function areas(c, opts) {
+    opts = opts || {};
+    const s = c.s, out = [];
+    const add = (key, label, status, headline, detail, tab, tabLabel) => out.push({ key: key, label: label, status: status, headline: headline, detail: detail, tab: tab, tabLabel: tabLabel });
+    const g = (k) => c.ind.find((i) => i.key === k);
+
+    // dados
+    const cr = c.q.critical, pend = cr.pending.concat(c.q.rows.pending);
+    const empty = !s.diag.bsAssets.length && !s.diag.flow.length;
+    add("dados", "Qualidade dos dados", empty ? "na" : pend.length ? "crit" : cr.confirmed / cr.total < 0.5 ? "warn" : "ok",
+      cr.confirmed + " de " + cr.total + " dados críticos confirmados", empty ? "Cadastre ativos, dívidas e fluxo no Diagnóstico." : pend.length ? "Pendentes: " + pend.slice(0, 6).join(", ") + (pend.length > 6 ? " e mais " + (pend.length - 6) : "") + "." : cr.estimated.length ? "Estimados: " + cr.estimated.slice(0, 5).join(", ") + "." : "Sem pendências.", "diag", "Diagnóstico");
+
+    // fluxo e poupança
+    const pou = g("poupanca");
+    add("fluxo", "Fluxo de caixa e poupança", c.fl.incomeRec <= 0 ? "na" : c.fl.surplus < 0 ? "crit" : fromInd(pou.status),
+      c.fl.incomeRec <= 0 ? "Sem renda recorrente cadastrada" : "Superávit de " + brl(c.fl.surplus) + "/mês (" + pct(c.fl.surplus / c.fl.incomeRec * 100) + " da renda)",
+      c.fl.incomeRec <= 0 ? "" : "Aporte realizado de " + brl(s.cashflow.executed) + "/mês, taxa de aporte de " + pct(pou.value, 1) + " (faixa: ao menos " + pct(pou.target) + ").", "diag", "Diagnóstico");
+
+    // reserva
+    const liq = g("liquidez");
+    add("reserva", "Reserva de contingência", c.fl.essentialMonthly <= 0 ? "na" : fromInd(liq.status),
+      c.rs.monthsHave == null ? "Sem despesa essencial cadastrada" : num1(c.rs.monthsHave) + " meses de liquidez (alvo: " + num1(c.rs.months) + ")",
+      c.rs.gap > 0 ? "Faltam " + brl(c.rs.gap) + " para o alvo de " + brl(c.rs.target) + "." : "Reserva acima do alvo de " + brl(c.rs.target) + ".", "diag", "Diagnóstico");
+
+    // dívidas
+    const dl = g("dividas"), costly = c.liabs.filter((l) => l.cet > c.altNet);
+    add("dividas", "Dívidas", c.bs.totalLiab <= 0 ? "ok" : costly.length && fromInd(dl.status) === "ok" ? "warn" : fromInd(dl.status),
+      c.bs.totalLiab <= 0 ? "Sem dívidas cadastradas" : "Dívidas de " + brl(c.bs.totalLiab) + "; prestações de " + brl(c.bs.serviceDebt) + "/mês" + (c.fl.incomeRec > 0 ? " (" + pct(c.bs.serviceDebt / c.fl.incomeRec * 100, 1) + " da renda)" : ""),
+      costly.length ? "Custo acima do retorno líquido esperado (" + pct(c.altNet, 1) + " a.a.): " + costly.map((l) => (l.label || "Dívida") + " (CET " + pct(l.cet, 1) + ")").join("; ") + "." : c.bs.totalLiab > 0 ? "Nenhuma dívida acima do retorno líquido esperado." : "", "cx", "Caixa e dívidas");
+
+    // metas
+    const gt = c.goals.totals, essentialOpen = c.goals.ranked.some((r) => r.priority === "essencial" && (r.status === "sem_recursos" || r.status === "vencida"));
+    add("metas", "Metas de vida", !c.goals.ranked.length ? "na" : gt.gap > 0.5 ? (essentialOpen ? "crit" : "warn") : "ok",
+      !c.goals.ranked.length ? "Nenhuma meta cadastrada" : c.goals.ranked.length + (c.goals.ranked.length === 1 ? " meta" : " metas") + " (" + brl(gt.amount) + " em valor de hoje); exigem " + brl(gt.required) + "/mês",
+      !c.goals.ranked.length ? "Cadastre as metas na etapa Objetivos." : gt.gap > 0.5 ? "Há " + brl(gt.available) + "/mês livres depois do aporte da aposentadoria; faltam " + brl(gt.gap) + "/mês." : "Os recursos livres cobrem o aporte necessário.", "obj", "Objetivos");
+
+    // aposentadoria
+    const cov = c.an ? c.an.consume.coverage : null;
+    add("aposentadoria", "Aposentadoria", !c.an || cov == null ? "na" : cov >= 1 ? "ok" : cov >= 0.8 ? "warn" : "crit",
+      !c.an ? "Premissas da aposentadoria com erro" : cov == null ? "Defina o padrão de vida desejado" : "Cobertura de " + pct(cov * 100) + " da renda desejada de " + brl(s.cashflow.desiredWithdrawal) + "/mês",
+      !c.an ? c.v.errors[0] : (cov != null && cov < 1 ? "Aporte adicional de " + (isFinite(c.an.consume.X) ? brl(c.an.consume.X) + "/mês" : "valor inviável") + " fecha a lacuna. " : "") + (c.crise && c.crise.coverage != null ? "Em crise no início da aposentadoria a cobertura cairia para " + pct(c.crise.coverage * 100) + "." : ""), "apos", "Aposentadoria");
+
+    // proteção
+    const pd = c.prot.death, pi = c.prot.disability;
+    const worst = [pd.status, pi.status].sort((a, b) => (SEV[a] === undefined ? 9 : SEV[a]) - (SEV[b] === undefined ? 9 : SEV[b]))[0];
+    add("protecao", "Proteção da família", !c.prot.hasDependents && pd.need <= 0 ? "na" : c.prot.hasDependents ? worst : pi.status,
+      pd.gap > 0 || pi.gap > 0 ? "Lacuna estimada: " + brl(pd.gap) + " (morte) e " + brl(pi.gap) + " (invalidez)" : "Sem lacuna de capital estimada",
+      "Necessidade de " + brl(pd.need) + " em caso de morte e " + brl(pi.need) + " em caso de invalidez; recursos considerados: " + brl(pd.resources) + ".", "prot", "Proteção");
+
+    // sucessão
+    const sc = c.succ;
+    add("sucessao", "Sucessão (liquidez do inventário)", sc.monte <= 0 ? "na" : sc.gap <= 0 ? "ok" : sc.coverage != null && sc.coverage >= 0.5 ? "warn" : "crit",
+      sc.monte <= 0 ? "Sem patrimônio líquido para inventariar" : "Custo estimado de " + brl(sc.total) + " (" + pct(sc.totalPct, 1) + " do monte-mor)",
+      sc.monte <= 0 ? "" : sc.gap > 0 ? "Liquidez fora do inventário de " + brl(sc.liquidOutside) + ": lacuna de caixa de " + brl(sc.gap) + "." : "A liquidez fora do inventário cobre o custo estimado.", "succ", "Sucessão");
+
+    // concentração
+    const con = g("concentracao");
+    add("concentracao", "Concentração do patrimônio financeiro", fromInd(con.status), con.value == null ? "Sem patrimônio financeiro cadastrado" : "Maior posição: " + pct(con.value, 1) + " do patrimônio financeiro", con.detail ? "Maior linha: " + con.detail + " (faixa: até " + pct(con.target) + ")." : "", "diag", "Diagnóstico");
+
+    // tributação (só se a etapa foi vista)
+    if (opts.taxVisited) {
+      const a = I.annual({ rend: s.irpf.anual.rend, irrf: s.irpf.anual.irrf, inss: s.irpf.anual.inss, dep: Math.floor(s.irpf.anual.dep), instr: s.irpf.anual.instr, med: s.irpf.anual.med, outras: s.irpf.anual.outras, aporte: s.irpf.anual.aporte }, s.irpf.vig);
+      add("tributario", "Eficiência tributária", "info", a.saving > 0 ? "PGBL pode reduzir o IR do ano em cerca de " + brl(a.saving) : "Sem economia de IR estimada com PGBL no perfil informado", "Estimativa com os dados da aba IRPF anual; o imposto é adiado, não eliminado. Confirme com o contador.", "ira", "IRPF anual e PGBL");
+    } else add("tributario", "Eficiência tributária", "na", "Não analisada nesta reunião", "Etapa opcional: IRPF mensal, anual e PGBL.", "ira", "IRPF anual e PGBL");
+    return out;
+  }
+
+  function summary(list) {
+    const att = list.filter((a) => a.status === "crit" || a.status === "warn").sort((a, b) => SEV[a.status] - SEV[b.status]);
+    return { strengths: list.filter((a) => a.status === "ok"), attention: att, counts: { crit: att.filter((a) => a.status === "crit").length, warn: att.filter((a) => a.status === "warn").length, ok: list.filter((a) => a.status === "ok").length, info: list.filter((a) => a.status === "info").length, na: list.filter((a) => a.status === "na").length } };
+  }
+
+  function executive(c, list) {
+    const sm = summary(list), lines = [];
+    lines.push("Patrimônio líquido de " + brl(c.bs.net) + " (financeiro: " + brl(c.bs.financial) + "), superávit sustentável de " + brl(c.fl.surplus) + "/mês e " + (c.rs.monthsHave == null ? "—" : num1(c.rs.monthsHave)) + " meses de liquidez.");
+    if (sm.strengths.length) lines.push("Pontos fortes: " + sm.strengths.map((a) => a.label.toLowerCase()).join("; ") + ".");
+    if (sm.attention.length) lines.push("Pontos de atenção, do mais ao menos urgente: " + sm.attention.map((a) => a.label.toLowerCase()).join("; ") + ".");
+    else lines.push("Nenhum ponto de atenção relevante nas áreas analisadas.");
+    return lines;
+  }
+
+  /* ---------- compromissos sugeridos (o planejador decide o que entra) ---------- */
+  const DOCS = { extratos: "extratos de contas e de investimentos", irpf: "declaração de IRPF e recibo", dividas: "contratos e saldos de dívidas", apolices: "apólices de seguros", previdencia: "extratos de previdência privada", imoveis: "escrituras e valores de imóveis", despesas: "faturas e comprovantes de despesas", testamento: "testamento, doações e regime de bens" };
+  function commitments(c, opts) {
+    opts = opts || {};
+    const s = c.s, out = [], ex = s.cashflow.executed, now = c.now;
+    const add = (source, text, kind, value, freq, due, owner, include) => out.push({ source: source, text: text, kind: kind, value: Math.round(num(value) * 100) / 100, freq: freq, due: due || "", owner: owner || "cliente", include: !!include });
+    if (ex > 0) add("aporte_apos", "Manter o aporte mensal de " + brl(ex) + " para a aposentadoria", "aporte", ex, "mensal", "", "cliente", true);
+    if (c.an && isFinite(c.an.consume.X) && c.an.consume.X > 0.5) {
+      add("aporte_apos_extra", "Aporte adicional de " + brl(c.an.consume.X) + "/mês para fechar a lacuna da aposentadoria (alternativas: reduzir o padrão de vida desejado ou adiar a aposentadoria)", "aporte", c.an.consume.X, "mensal", "", "cliente", false);
+      add("ajuste_apos", "Ajustar o objetivo de aposentadoria: reduzir o padrão de vida, adiar a data ou combinar as duas medidas, conforme decisão da reunião", "aporte", 0, "na", "", "cliente", false);
+    }
+    if (c.rs.gap > 0.5) add("reserva", "Completar a reserva de contingência (faltam " + brl(c.rs.gap) + ") e mantê-la em ao menos " + num1(s.ips.reserveMonths != null ? s.ips.reserveMonths : c.rs.months) + " meses de despesas essenciais", "reserva", c.rs.gap, "unico", isoPlusMonths(now, 12), "cliente", true);
+    c.liabs.filter((l) => l.cet > c.altNet).forEach((l) => add("divida:" + l.id, "Quitar ou renegociar “" + (l.label || "dívida") + "” (CET " + pct(l.cet, 1) + " a.a., saldo de " + brl(l.balance) + ")" + (s.debtPlan.extra > 0 ? " com recurso extra de " + brl(s.debtPlan.extra) + "/mês" : ""), "divida", s.debtPlan.extra, s.debtPlan.extra > 0 ? "mensal" : "na", "", "cliente", true));
+    c.goals.ranked.filter((r) => r.need > 0 && !r.overdue).forEach((r) => add("meta:" + r.id, "Reservar " + brl(r.pmt) + "/mês para “" + r.label + "” até " + r.year + " (" + brl(r.amount) + " em valor de hoje)", "meta", r.pmt, "mensal", r.year + "-01-01", "cliente", r.status === "no_caminho"));
+    if (c.prot.hasDependents && c.prot.death.gap > 0.5) add("protecao", "Decidir sobre a cobertura de proteção da família (lacuna estimada de " + brl(c.prot.death.gap) + " em caso de morte e " + brl(c.prot.disability.gap) + " em caso de invalidez), com profissional habilitado", "protecao", c.prot.death.gap, "unico", isoPlusMonths(now, 6), "cliente", false);
+    if (c.succ.gap > 0.5) add("sucessao", "Prever o caixa para o inventário (lacuna estimada de " + brl(c.succ.gap) + "), com orientação jurídica", "sucessao", c.succ.gap, "unico", isoPlusMonths(now, 12), "cliente", false);
+    const dk = s.meeting.docs, ticked = Object.keys(DOCS).filter((k) => dk[k]), missing = Object.keys(DOCS).filter((k) => !dk[k]);
+    if (ticked.length && missing.length) add("docs", "Entregar os documentos que faltam: " + missing.map((k) => DOCS[k]).join("; "), "dados", 0, "na", isoPlusMonths(now, 1), "cliente", false);
+    const pend = c.q.critical.pending.concat(c.q.rows.pending);
+    if (pend.length) add("dados", "Entregar os dados e documentos pendentes: " + pend.slice(0, 6).join(", ") + (pend.length > 6 ? " e outros" : ""), "dados", 0, "na", isoPlusMonths(now, 1), "cliente", true);
+    if (opts.taxVisited) {
+      const a = I.annual({ rend: s.irpf.anual.rend, irrf: s.irpf.anual.irrf, inss: s.irpf.anual.inss, dep: Math.floor(s.irpf.anual.dep), instr: s.irpf.anual.instr, med: s.irpf.anual.med, outras: s.irpf.anual.outras, aporte: s.irpf.anual.aporte }, s.irpf.vig);
+      if (a.saving > 0) add("pgbl", "Avaliar com o contador o aporte em previdência (PGBL) de até " + brl(a.aporte) + " no ano, com economia de IR estimada de " + brl(a.saving), "tributario", a.aporte, "anual", "", "cliente", false);
+    }
+    add("comp_resgate", "Não usar o patrimônio destinado à aposentadoria e às metas para consumo sem antes revisar o plano com o planejador", "comportamento", 0, "na", "", "cliente", true);
+    add("comp_revisao", "Participar da revisão do plano a cada " + s.ips.reviewMonths + " meses e sempre que ocorrer um evento de revisão", "comportamento", 0, "na", "", "cliente", true);
+    add("comp_comunicar", "Comunicar ao planejador mudanças de renda, de família ou de patrimônio em até 30 dias", "comportamento", 0, "na", "", "cliente", true);
+    return out;
+  }
+
+  /* ---------- etapas da reunião ---------- */
+  const STAGE_IDS = ["open", "diag", "obj", "ana", "tax", "syn", "ips"];
+  function stages(s, visited) {
+    visited = visited || [];
+    const seen = (...t) => t.every((x) => visited.indexOf(x) !== -1);
+    const done = {
+      open: !!(s.client.name && s.pro.name && s.pro.scope),
+      diag: s.diag.bsAssets.length > 0 && s.diag.flow.length > 0,
+      obj: s.goals.some((g) => g.amount > 0 && g.year > 0),
+      ana: seen("cx", "prot", "apos"),
+      tax: visited.some((x) => ["irm", "ira", "pgbl"].indexOf(x) !== -1),
+      syn: s.actions.length > 0,
+      ips: s.ips.status === "aceito"
+    };
+    const list = STAGE_IDS.map((id) => ({ id: id, done: !!done[id], optional: id === "tax" }));
+    const next = list.find((x) => !x.done && !x.optional);
+    return { list: list, next: next ? next.id : null };
+  }
+
+  /* ---------- modelo do documento (IPS de planejamento) ---------- */
+  function ipsModel(c, opts) {
+    opts = opts || {};
+    const s = c.s, ips = s.ips, now = c.now, pro = s.pro, p = s.profile;
+    const inc = s.commitments.filter((x) => x.include);
+    const when = ips.status === "aceito" && ips.acceptedOn ? ips.acceptedOn : now.toISOString().slice(0, 10);
+    const next = (function () { const d = new Date(when + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + ips.reviewMonths); return d.toISOString().slice(0, 10); })();
+    const cov = c.an ? c.an.consume.coverage : null, resMin = ips.reserveMonths != null ? ips.reserveMonths : c.rs.months;
+    const situation = [
+      { label: "Patrimônio líquido", value: brl(c.bs.net) }, { label: "Patrimônio financeiro", value: brl(c.bs.financial) },
+      { label: "Superávit sustentável", value: brl(c.fl.surplus) + "/mês" }, { label: "Aporte realizado", value: brl(s.cashflow.executed) + "/mês" },
+      { label: "Liquidez da reserva", value: c.rs.monthsHave == null ? "—" : num1(c.rs.monthsHave) + " meses (alvo " + num1(c.rs.months) + ")" },
+      { label: "Dívidas", value: brl(c.bs.totalLiab) + " (prestações de " + brl(c.bs.serviceDebt) + "/mês)" },
+      { label: "Cobertura da renda desejada na aposentadoria", value: cov == null ? "—" : pct(cov * 100) }
+    ];
+    const objectives = [];
+    if (c.an) objectives.push({ label: "Aposentadoria aos " + p.retireAge + " anos", detail: "Padrão de vida de " + brl(s.cashflow.desiredWithdrawal) + "/mês (valores de hoje), por " + (p.horizonAge - p.retireAge) + " anos" + (s.cashflow.minLegacy > 0 ? ", deixando ao menos " + brl(s.cashflow.minLegacy) : "") + "." });
+    c.goals.ranked.forEach((r) => objectives.push({ label: r.label, detail: brl(r.amount) + " em " + r.year + " (valores de hoje); prioridade " + r.priority + "." }));
+    const rt = E.ratesOf(s);
+    const assumptions = [
+      "Retorno real de " + pct(rt.rrAcc * 100, 2) + " a.a. na acumulação e " + pct(rt.rrPost * 100, 2) + " a.a. na aposentadoria; inflação de " + pct(s.rates.inflation, 1) + " a.a.; horizonte até os " + p.horizonAge + " anos.",
+      "Valores em reais de hoje. Projeções dependem das premissas e não garantem resultado futuro; o plano é revisto quando elas mudam."
+    ];
+    const rules = [
+      { key: "cobertura", label: "Cobertura da renda desejada na aposentadoria", rule: "Revisar o plano se ficar abaixo de " + pct(ips.coverageMin) + ".", current: cov == null ? "—" : pct(cov * 100), status: cov == null ? "na" : cov * 100 >= ips.coverageMin ? "ok" : "crit" },
+      { key: "reserva", label: "Reserva de contingência", rule: "Manter ao menos " + num1(resMin) + " meses de despesas essenciais; abaixo disso, suspender aportes às metas classificadas como desejo e recompor a reserva.", current: c.rs.monthsHave == null ? "—" : num1(c.rs.monthsHave) + " meses", status: c.rs.monthsHave == null ? "na" : c.rs.monthsHave >= resMin ? "ok" : "crit" },
+      { key: "queda", label: "Queda do patrimônio financeiro", rule: "Se cair mais de " + pct(ips.drawdownTrigger) + " em 12 meses, reduzir gastos discricionários em " + pct(ips.spendCut) + " e antecipar a revisão do plano.", current: "Gatilho acionado só por evento", status: "na" },
+      { key: "revisao", label: "Revisão do plano", rule: "A cada " + ips.reviewMonths + " meses (próxima: " + next.split("-").reverse().join("/") + ") e nos eventos: " + ips.events, current: "", status: "na" }
+    ];
+    const responsibilities = {
+      client: ["Fornecer informações verdadeiras e atualizadas e os documentos solicitados.", "Cumprir os compromissos acima ou avisar com antecedência quando não puder.", "Comunicar os eventos de revisão.", "Decidir sobre produtos e serviços com profissionais habilitados para cada tipo de decisão."],
+      planner: ["Elaborar e manter o plano com base nas informações recebidas.", "Explicar premissas, riscos e limitações das projeções.", "Reavaliar o plano nos prazos combinados e nos eventos de revisão.", "Informar a remuneração e os conflitos de interesse."]
+    };
+    const needs = [{ label: "Reserva de contingência", detail: "liquidez imediata de " + brl(c.rs.target) + " (" + num1(c.rs.months) + " meses de despesas essenciais)" }];
+    c.goals.ranked.forEach((r) => needs.push({ label: r.label, detail: brl(r.amount) + " disponíveis em " + r.year + " (prazo de " + (r.overdue ? "vencido" : num1(r.months / 12) + " anos") + "); baixa tolerância a oscilação perto da data" }));
+    if (c.an) needs.push({ label: "Aposentadoria", detail: "horizonte de " + (p.retireAge - p.currentAge) + " anos até aposentar e " + (p.horizonAge - p.retireAge) + " anos de retiradas" });
+    const investment = pro.cvm === "sim"
+      ? { mode: "autorizado", profileDate: ips.profileDate, profileStale: !ips.profileDate || (now - new Date(ips.profileDate + "T12:00:00Z")) / 864e5 > 730, policy: ips.investmentPolicy, tolerance: s.risk.tolerance, drawdown: s.risk.drawdown, needs: needs }
+      : { mode: "cliente", tolerance: s.risk.tolerance, drawdown: s.risk.drawdown, needs: needs };
+    const warnings = [];
+    if (!s.client.name) warnings.push("Informe o nome do cliente (etapa Abertura).");
+    if (!pro.name || !pro.scope) warnings.push("Preencha o profissional e o escopo do serviço (etapa Abertura): eles aparecem no documento.");
+    if (!c.an) warnings.push("Corrija as premissas da aposentadoria.");
+    if (c.q.critical.pending.length || c.q.rows.pending.length) warnings.push("Há dados pendentes: o compromisso se apoia em números não confirmados.");
+    if (!inc.length) warnings.push("Nenhum compromisso foi incluído.");
+    if (inc.some((x) => (x.kind === "reserva" || x.kind === "meta") && !x.due)) warnings.push("Há compromisso de reserva ou meta sem prazo.");
+    if (cov != null && cov < 1 && !inc.some((x) => x.source === "aporte_apos_extra" || x.source === "ajuste_apos")) warnings.push("A cobertura da aposentadoria está abaixo de 100% e nenhuma medida para fechá-la foi incluída (aporte adicional ou ajuste do objetivo).");
+    if (ips.drawdownTrigger > s.risk.drawdown && s.risk.drawdown > 0) warnings.push("O gatilho de queda do patrimônio (" + pct(ips.drawdownTrigger) + ") é maior que a queda que o cliente disse suportar (" + pct(s.risk.drawdown) + ").");
+    if (pro.cvm === "sim" && investment.profileStale) warnings.push("O perfil de investidor está sem data ou com mais de 24 meses.");
+    return {
+      identification: { client: s.client.name, planner: pro.name, cert: pro.cert, cvm: pro.cvm, cvmNo: pro.cvmNo, date: when, reviewMonths: ips.reviewMonths, nextReview: next },
+      situation: situation, objectives: objectives, assumptions: assumptions, commitments: inc, rules: rules, responsibilities: responsibilities,
+      scope: { scope: pro.scope, fee: pro.fee, conflicts: pro.conflicts }, investment: investment,
+      acceptance: { status: ips.status, acceptedOn: ips.acceptedOn }, warnings: warnings, disclaimer: P.disclaimer(s)
+    };
+  }
+
+  return { context, areas, summary, executive, commitments, stages, ipsModel, STAGE_IDS, DOCS, isoPlusMonths };
+})(
+  typeof Engine !== "undefined" ? Engine : require("./engine.js"),
+  typeof Planning !== "undefined" ? Planning : require("./planning.js"),
+  typeof Goals !== "undefined" ? Goals : require("./goals.js"),
+  typeof Debt !== "undefined" ? Debt : require("./debt.js"),
+  typeof Protection !== "undefined" ? Protection : require("./protection.js"),
+  typeof Succession !== "undefined" ? Succession : require("./succession.js"),
+  typeof Irpf !== "undefined" ? Irpf : require("./irpf.js")
+);
+if (typeof module !== "undefined") module.exports = Synthesis;
+/* SYNTHESIS:END */
+
 /* APP:BEGIN */
 (function () {
   "use strict";
@@ -1479,7 +1728,7 @@ if (typeof module !== "undefined") module.exports = Versions;
   let rowSeq = 1;
   function recomputeRowSeq() {
     rowSeq = 1;
-    [state.extraMonthly, state.extraAnnual, state.retIncome, state.actions, state.memos, state.diag.bsAssets, state.diag.bsLiabilities, state.diag.flow, state.goals, state.phaseRows, state.taxRows].forEach((l) => l.forEach((r) => { rowSeq = Math.max(rowSeq, (r.id || 0) + 1); }));
+    [state.extraMonthly, state.extraAnnual, state.retIncome, state.actions, state.memos, state.diag.bsAssets, state.diag.bsLiabilities, state.diag.flow, state.goals, state.phaseRows, state.taxRows, state.commitments].forEach((l) => l.forEach((r) => { rowSeq = Math.max(rowSeq, (r.id || 0) + 1); }));
   }
   recomputeRowSeq();
 
@@ -1572,7 +1821,7 @@ if (typeof module !== "undefined") module.exports = Versions;
       const evt = el.type === "checkbox" || el.tagName === "SELECT" ? "change" : "input";
       el.addEventListener(evt, () => {
         setPath(state, el.dataset.path, readField(el));
-        if (el.dataset.path === "irpf.vig") document.querySelectorAll('[data-path="irpf.vig"]').forEach((s) => { s.value = state.irpf.vig; });
+        document.querySelectorAll('[data-path="' + el.dataset.path + '"]').forEach((o) => { if (o !== el) fillField(o); });
         if (el.id === "differentiateChk") $("postRatesRow").style.display = el.checked ? "grid" : "none";
         if (el.dataset.path === "pro.cvm") renderCards("memos");
         renderAll(); scheduleSave();
@@ -1654,6 +1903,8 @@ if (typeof module !== "undefined") module.exports = Versions;
   const L_GPRIO = [["essencial", "Essencial"], ["importante", "Importante"], ["desejo", "Desejo"]];
   const L_TAXKIND = [["pgbl", "PGBL"], ["vgbl", "VGBL"], ["tributavel", "Investimento tributável"], ["isento", "Isento de IR"]];
   const L_REGIME = [["regressivo", "Regressivo"], ["progressivo", "Progressivo"]];
+  const L_CKIND = [["aporte", "Aporte"], ["reserva", "Reserva"], ["divida", "Dívida"], ["meta", "Meta"], ["protecao", "Proteção"], ["sucessao", "Sucessão"], ["tributario", "Tributário"], ["dados", "Dados e documentos"], ["comportamento", "Comportamento"], ["outro", "Outro"]];
+  const L_CFREQ = [["mensal", "Por mês"], ["anual", "Por ano"], ["unico", "Valor único"], ["na", "Sem valor"]];
   const label = (list, k) => { const f = list.find((x) => x[0] === k); return f ? f[1] : k; };
   const todayISO = () => new Date().toLocaleDateString("sv-SE");
 
@@ -1688,6 +1939,12 @@ if (typeof module !== "undefined") module.exports = Versions;
       make: () => ({ label: "", kind: "tributavel", value: 0, gainPct: 50, regime: "regressivo", years: 10, monthly: 0 }),
       fields: [{ k: "label", l: "Descrição", t: "text" }, { k: "kind", l: "Tipo", t: "select", opts: L_TAXKIND, w: 140 }, { k: "value", l: "Valor (R$)", t: "money", w: 108 }, { k: "gainPct", l: "% ganho", t: "pct", w: 72 }, { k: "regime", l: "Regime", t: "select", opts: L_REGIME, w: 108 }, { k: "years", l: "Anos", t: "int", w: 60 }, { k: "monthly", l: "Saque/mês (prog.)", t: "money", w: 112 }]
     },
+    commitments: {
+      path: "commitments", box: "commitRows", add: "addCommit", empty: "Nenhum compromisso ainda. Use “Sugerir a partir do plano” para começar.",
+      make: () => ({ text: "", kind: "outro", value: 0, freq: "na", due: "", owner: "cliente", include: true, source: "" }),
+      fields: [{ k: "text", l: "Compromisso", t: "textarea", span: 9, max: 300 }, { k: "include", l: "Entra no documento", t: "bool", span: 3, rerender: true }, { k: "kind", l: "Tipo", t: "select", opts: L_CKIND, span: 3 }, { k: "value", l: "Valor (R$)", t: "money", span: 3 }, { k: "freq", l: "Periodicidade", t: "select", opts: L_CFREQ, span: 2 }, { k: "due", l: "Prazo", t: "date", span: 2 }, { k: "owner", l: "Responsável", t: "select", opts: L_OWNER, span: 2 }],
+      cls: (r) => (r.include ? "" : "off")
+    },
     actions: {
       path: "actions", box: "actionRows", add: "addAction", empty: "Nenhuma ação no plano. Use as sugestões acima ou adicione a primeira.",
       make: () => ({ title: "", priority: "media", owner: "cliente", dep: "", due: "", cost: "", evidence: "", status: "nao_iniciada", next: "", source: "" }),
@@ -1716,6 +1973,7 @@ if (typeof module !== "undefined") module.exports = Versions;
     if (f.t === "pct") return '<input type="text" inputmode="decimal" data-field="' + k + '"' + aria + ' style="text-align:right" value="' + esc(pctField(v)) + '">';
     if (f.t === "pctOpt") return '<input type="text" inputmode="decimal" data-field="' + k + '"' + aria + ' style="text-align:right" placeholder="padrão" value="' + esc(v == null ? "" : pctField(v)) + '">';
     if (f.t === "int") return '<input type="number" data-field="' + k + '"' + aria + ' style="text-align:right" value="' + esc(v == null ? "" : v) + '">';
+    if (f.t === "bool") return '<label class="switch-row" style="padding:6px 0"><input type="checkbox" data-field="' + k + '"' + aria + (v ? " checked" : "") + "><span>" + (v ? "Incluído" : "Fora do documento") + "</span></label>";
     if (f.t === "date") return '<input type="date" data-field="' + k + '"' + aria + ' value="' + esc(v || "") + '">';
     return '<input type="text" maxlength="' + (f.max || 160) + '" data-field="' + k + '"' + aria + ' value="' + esc(v) + '" autocomplete="off">';
   }
@@ -1724,9 +1982,10 @@ if (typeof module !== "undefined") module.exports = Versions;
   function wireRow(el, cfg, name, row) {
     el.querySelectorAll("[data-field]").forEach((inp) => {
       const f = cfg.fields.find((x) => x.k === inp.dataset.field);
-      inp.addEventListener(inp.tagName === "SELECT" || inp.type === "date" ? "change" : "input", () => {
+      inp.addEventListener(inp.tagName === "SELECT" || inp.type === "date" || inp.type === "checkbox" ? "change" : "input", () => {
         let v = inp.value;
-        if (f.t === "money") v = Engine.parseLocaleNumber(inp.value);
+        if (f.t === "bool") v = inp.checked;
+        else if (f.t === "money") v = Engine.parseLocaleNumber(inp.value);
         else if (f.t === "pct") v = Engine.parseLocaleNumber(inp.value, true);
         else if (f.t === "pctOpt") v = inp.value.trim() === "" ? null : Engine.parseLocaleNumber(inp.value, true);
         else if (f.t === "int") v = Number(inp.value) || 0;
@@ -1780,7 +2039,7 @@ if (typeof module !== "undefined") module.exports = Versions;
 
   function renderDisclaimers() {
     const d = Planning.disclaimer(state);
-    const html = '<div class="disclaimer"><b>Aviso.</b> ' + d.lines.map(esc).join(" ") + (d.filled ? "" : '<div class="banner warn no-pdf" style="margin:8px 0 0">Identificação incompleta: preencha em <b>Plano de ação → Profissional e escopo</b>.</div>') + "</div>";
+    const html = '<div class="disclaimer"><b>Aviso.</b> ' + d.lines.map(esc).join(" ") + (d.filled ? "" : '<div class="banner warn no-pdf" style="margin:8px 0 0">Identificação incompleta: preencha em <b>Abertura → Profissional e escopo</b>.</div>') + "</div>";
     document.querySelectorAll(".disclaimer-slot").forEach((el) => { el.innerHTML = html; });
   }
 
@@ -1897,19 +2156,24 @@ if (typeof module !== "undefined") module.exports = Versions;
   /* ================= ABA · PLANO DE AÇÃO ================= */
   const PRIO_RANK = { critica: 0, alta: 1, media: 2, baixa: 3 };
   const PRIO_BADGE = { critica: "critical", alta: "warning", media: "neutral", baixa: "neutral" };
+  function openActionsSorted() {
+    return state.actions.filter((a) => a.status !== "concluida").sort((a, b) => (PRIO_RANK[a.priority] - PRIO_RANK[b.priority]) || ((a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : 0) || a.id - b.id);
+  }
+  function top3HTML(emptyMsg) {
+    const sorted = openActionsSorted().slice(0, 3);
+    return sorted.length ? '<div class="top3">' + sorted.map((a, i) => '<div class="t"><div class="n">' + (i + 1) + '</div><div><div class="tt">' + esc(a.title || "(sem título)") + '</div><div class="tm">' + label(L_OWNER, a.owner) + " · " + (a.due ? "prazo " + a.due.split("-").reverse().join("/") : "sem prazo") + " · " + label(L_STATUS, a.status) + (a.next ? " · próximo passo: " + esc(a.next) : "") + '</div></div><span class="badge ' + PRIO_BADGE[a.priority] + '">' + label(L_PRIORITY, a.priority) + "</span></div>").join("") + "</div>" : '<div class="empty-note">' + (emptyMsg || "Nenhuma ação aberta. Adicione ações abaixo ou use as sugestões do sistema.") + "</div>";
+  }
+  function computeSuggestions(c) {
+    c = c || Synthesis.context(state);
+    const tauEst = state.taxRows.length ? taxOf().tau : null;
+    return Planning.suggestions(state, { an: c.an, bs: c.bs, fl: c.fl, rs: c.rs, ind: c.ind, quality: c.q, goals: c.goals, protection: c.prot, succession: c.succ, tauEst, stress: c.crise ? { crise: c.crise } : {} }).filter((x) => !state.actions.some((a) => a.source === x.key));
+  }
   function renderPlan() {
     const t = todayISO(), open = state.actions.filter((a) => a.status !== "concluida");
     const overdue = open.filter((a) => a.due && a.due < t), blocked = open.filter((a) => a.status === "bloqueada"), done = state.actions.filter((a) => a.status === "concluida");
     $("planKpis").innerHTML = tileHTML("Ações abertas", open.length, open.filter((a) => a.status === "em_curso").length + " em curso") + tileHTML("Prazo vencido", overdue.length, "Abertas com prazo anterior a hoje", overdue.length ? "neg" : "") + tileHTML("Bloqueadas", blocked.length, "Dependem de documento, liquidez ou decisão") + tileHTML("Concluídas", done.length, state.actions.length ? Math.round(done.length / state.actions.length * 100) + "% do plano" : "Sem ações cadastradas");
-
-    const sorted = open.slice().sort((a, b) => (PRIO_RANK[a.priority] - PRIO_RANK[b.priority]) || ((a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : 0) || a.id - b.id).slice(0, 3);
-    $("top3").innerHTML = sorted.length ? '<div class="top3">' + sorted.map((a, i) => '<div class="t"><div class="n">' + (i + 1) + '</div><div><div class="tt">' + esc(a.title || "(sem título)") + '</div><div class="tm">' + label(L_OWNER, a.owner) + " · " + (a.due ? "prazo " + a.due.split("-").reverse().join("/") : "sem prazo") + " · " + label(L_STATUS, a.status) + (a.next ? " · próximo passo: " + esc(a.next) : "") + '</div></div><span class="badge ' + PRIO_BADGE[a.priority] + '">' + label(L_PRIORITY, a.priority) + "</span></div>").join("") + "</div>" : '<div class="empty-note">Nenhuma ação aberta. Adicione ações abaixo ou use as sugestões do sistema.</div>';
-
-    const bs = Planning.balanco(state), fl = Planning.fluxo(state, bs), rs = Planning.reserva(state, fl, bs);
-    const v = Engine.validate(state), an = v.errors.length ? null : Engine.analyze(state, 0);
-    const ind = Planning.indicadores(state, bs, fl, rs, an), q = Planning.quality(state);
-    const gl = Goals.analyze(state, fl, bs, new Date(), an), pr = Protection.analyze(state, { fl, bs, goals: gl }), tauEst = state.taxRows.length ? taxOf().tau : null, sc = Succession.analyze(state, { bs });
-    const sug = Planning.suggestions(state, { an, bs, fl, rs, ind, quality: q, goals: gl, protection: pr, succession: sc, tauEst, stress: an ? { crise: Engine.stress(state, state.stress.crise) } : {} }).filter((s) => !state.actions.some((a) => a.source === s.key));
+    $("top3").innerHTML = top3HTML();
+    const sug = computeSuggestions();
     $("suggestBox").innerHTML = sug.length ? '<div class="sug-box">' + sug.map((s) => '<div class="sug"><div><div class="st">' + esc(s.title) + ' <span class="badge ' + PRIO_BADGE[s.priority] + '">' + label(L_PRIORITY, s.priority) + '</span></div><div class="se">' + esc(s.evidence) + '</div><div class="sn">Próximo passo: ' + esc(s.next) + '</div></div><button class="btn ghost" type="button" data-sug="' + s.key + '">Adicionar ao plano</button></div>').join("") + "</div>" : '<div class="empty-note">Nenhuma sugestão pendente: os indicadores atuais não apontam novas ações, ou as sugestões já foram adicionadas.</div>';
     $("suggestBox").querySelectorAll("[data-sug]").forEach((btn) => btn.addEventListener("click", () => {
       const s = sug.find((x) => x.key === btn.dataset.sug); if (!s) return;
@@ -2688,36 +2952,207 @@ if (typeof module !== "undefined") module.exports = Versions;
     });
   }
 
+  /* ================= etapas da reunião ================= */
+  const STAGES = [
+    { id: "open", name: "Abertura", panes: ["open"], ask: "Quem é o cliente, o que ele espera da reunião e o que já trouxe?" },
+    { id: "diag", name: "Diagnóstico", panes: ["diag"], ask: "Qual é a situação de hoje: patrimônio, fluxo, reserva, dívidas e qualidade dos dados?" },
+    { id: "obj", name: "Objetivos", panes: ["obj"], ask: "O que o cliente quer realizar, até quando e em que ordem de importância?" },
+    { id: "ana", name: "Análises", panes: ["cx", "prot", "apos", "succ"], ask: "Os recursos dão conta dos objetivos? Como proteger a família e o patrimônio?" },
+    { id: "tax", name: "Tributação", panes: ["irm", "ira", "pgbl"], optional: true, ask: "Há eficiência tributária a avaliar com o contador? (etapa opcional)" },
+    { id: "syn", name: "Síntese e plano", panes: ["syn", "plan"], ask: "O que priorizar? Quem faz o quê, e até quando?" },
+    { id: "ips", name: "Compromisso", panes: ["ips"], ask: "O cliente assume estes compromissos? Registre o aceite e gere o documento." }
+  ];
+  const PANE_LABEL = { open: "Abertura", diag: "Diagnóstico", obj: "Objetivos", cx: "Caixa e dívidas", prot: "Proteção", apos: "Aposentadoria", succ: "Sucessão", irm: "IRPF mensal", ira: "IRPF anual e PGBL", pgbl: "PGBL no longo prazo", syn: "Diagnóstico final", plan: "Plano de ação", ips: "Compromisso (IPS)", ver: "Versões" };
+  const FLOW = STAGES.flatMap((x) => x.panes), TABS = FLOW.concat(["ver"]);
+  const stageOf = (t) => { const x = STAGES.find((y) => y.panes.includes(t)); return x ? x.id : null; };
+  const stageLast = {};
+  const seenList = () => Object.keys(state.meeting.seen).filter((k) => state.meeting.seen[k]);
+  const taxSeen = () => ["irm", "ira", "pgbl"].some((k) => state.meeting.seen[k]);
+  const fdate = (iso) => (iso ? String(iso).split("-").reverse().join("/") : "—");
+
+  function renderStages() {
+    const st = Synthesis.stages(state, seenList()), m = {};
+    st.list.forEach((x) => { m[x.id] = x; });
+    document.querySelectorAll(".stage[data-stage]").forEach((b) => { const x = m[b.dataset.stage]; b.classList.toggle("done", !!(x && x.done)); b.classList.toggle("optional", !!(x && x.optional)); });
+  }
+  const OPT_PANES = (STAGES.find((x) => x.optional) || { panes: [] }).panes;
+  // Fora da etapa opcional, o "próximo" e o "anterior" a pulam; um botão extra oferece entrar nela.
+  function navTargets(t) {
+    const inOpt = OPT_PANES.includes(t), flow = inOpt ? FLOW : FLOW.filter((x) => !OPT_PANES.includes(x)), i = flow.indexOf(t), fi = FLOW.indexOf(t);
+    return { prev: i > 0 ? flow[i - 1] : null, next: i >= 0 && i < flow.length - 1 ? flow[i + 1] : null, opt: !inOpt && i >= 0 && i < flow.length - 1 && FLOW[fi + 1] !== flow[i + 1] ? FLOW[fi + 1] : null };
+  }
+  function renderStepNav() {
+    const box = document.querySelector("#pane-" + active + " .stepnav"); if (!box) return;
+    const g = STAGES.find((x) => x.id === stageOf(active)); if (!g) { box.innerHTML = ""; return; }
+    const nv = navTargets(active);
+    box.innerHTML = (nv.prev ? '<button class="btn ghost" type="button" data-go="' + nv.prev + '">← ' + esc(PANE_LABEL[nv.prev]) + "</button>" : "<span></span>") +
+      '<span class="hint">Etapa ' + (STAGES.indexOf(g) + 1) + " de " + STAGES.length + " · " + esc(g.name) + (g.panes.length > 1 ? " (" + (g.panes.indexOf(active) + 1) + "/" + g.panes.length + ")" : "") + "</span>" +
+      '<span class="nxt">' + (nv.opt ? '<button class="btn ghost" type="button" data-go="' + nv.opt + '">Tributação (opcional)</button>' : "") + (nv.next ? '<button class="btn" type="button" data-go="' + nv.next + '">' + esc(PANE_LABEL[nv.next]) + " →</button>" : "") + "</span>";
+  }
+
+  /* ---------- Abertura: roteiro ---------- */
+  function renderOpen() {
+    const st = Synthesis.stages(state, seenList()), byId = {};
+    st.list.forEach((x) => { byId[x.id] = x; });
+    $("roadmap").innerHTML = '<div class="road">' + STAGES.map((g, i) => {
+      const x = byId[g.id], cls = x.done ? " done" : st.next === g.id ? " next" : "";
+      const chip = x.done ? '<span class="badge good">Concluída</span>' : st.next === g.id ? '<span class="badge warning">Próxima</span>' : g.optional ? '<span class="badge neutral">Opcional</span>' : "";
+      return '<div class="road-item' + cls + '"><div class="n">' + (x.done ? "✓" : i + 1) + '</div><div><div class="t">' + esc(g.name) + " " + chip + '</div><div class="q">' + esc(g.ask) + '</div></div><button class="btn-small no-pdf" type="button" data-go="' + (stageLast[g.id] || g.panes[0]) + '">' + (x.done ? "Revisar" : "Abrir") + "</button></div>";
+    }).join("") + "</div>";
+  }
+
+  /* ---------- Diagnóstico final ---------- */
+  const AREA_BADGE = { ok: ["good", "Em ordem"], warn: ["warning", "Atenção"], crit: ["critical", "Prioridade"], info: ["neutral", "Informativo"], na: ["neutral", "Sem dado"] };
+  function renderSyn() {
+    const c = Synthesis.context(state), list = Synthesis.areas(c, { taxVisited: taxSeen() }), sm = Synthesis.summary(list), ex = Synthesis.executive(c, list);
+    $("synSummary").innerHTML = '<div class="sum-lines">' + ex.map((l) => "<p>" + esc(l) + "</p>").join("") + "</div>" +
+      '<div class="sum-chips">' + (sm.counts.crit ? '<span class="badge critical">' + sm.counts.crit + " prioridade" + (sm.counts.crit > 1 ? "s" : "") + "</span>" : "") + (sm.counts.warn ? '<span class="badge warning">' + sm.counts.warn + " em atenção</span>" : "") + '<span class="badge good">' + sm.counts.ok + " em ordem</span>" + (sm.counts.na ? '<span class="badge neutral">' + sm.counts.na + " sem dado</span>" : "") + "</div>";
+    $("synAreas").innerHTML = '<div class="area-wrap"><table class="area-table"><thead><tr><th>Área</th><th>Situação</th><th>Leitura</th><th class="no-pdf"></th></tr></thead><tbody>' + list.map((a) => {
+      const b = AREA_BADGE[a.status] || AREA_BADGE.na;
+      return '<tr><td class="a">' + esc(a.label) + '</td><td class="s"><span class="badge ' + b[0] + '">' + b[1] + '</span></td><td><div class="hd">' + esc(a.headline) + "</div>" + (a.detail ? '<div class="dt">' + esc(a.detail) + "</div>" : "") + '</td><td class="go no-pdf"><button class="btn-small" type="button" data-go="' + a.tab + '">' + esc(a.tabLabel) + "</button></td></tr>";
+    }).join("") + "</tbody></table></div>";
+    const open = openActionsSorted();
+    if (open.length) $("synTop3").innerHTML = top3HTML();
+    else {
+      const sug = computeSuggestions(c).slice(0, 3);
+      $("synTop3").innerHTML = (sug.length ? '<div class="empty-note" style="padding-top:0">O plano de ação ainda está vazio. Estas são as prioridades apontadas pelos números; transforme-as em ações na etapa seguinte.</div><div class="top3">' + sug.map((x, i) => '<div class="t"><div class="n">' + (i + 1) + '</div><div><div class="tt">' + esc(x.title) + '</div><div class="tm">' + esc(x.evidence) + '</div></div><span class="badge ' + PRIO_BADGE[x.priority] + '">' + label(L_PRIORITY, x.priority) + "</span></div>").join("") + "</div>" : '<div class="empty-note">Sem prioridades apontadas pelos números. Registre as decisões da reunião no plano de ação.</div>') +
+        '<div class="actions no-pdf" style="margin-top:12px"><button class="btn" type="button" data-go="plan">Montar o plano de ação</button></div>';
+    }
+  }
+
+  /* ---------- Compromisso (IPS) ---------- */
+  const FREQ_TXT = { mensal: " por mês", anual: " por ano", unico: "", na: "" };
+  const commitValue = (x) => (x.freq === "na" || !(x.value > 0) ? "—" : money(x.value) + (FREQ_TXT[x.freq] || ""));
+  const TOL_TXT = { conservadora: "conservadora (prefere previsibilidade)", moderada: "moderada (aceita oscilar um pouco)", arrojada: "arrojada (aceita oscilar bastante)" };
+  const kv = (k, v, pre) => "<dt>" + esc(k) + "</dt><dd" + (pre ? ' style="white-space:pre-wrap"' : "") + ">" + esc(v) + "</dd>";
+  function ipsDocHTML(m, altered) {
+    const id = m.identification, inv = m.investment, ac = m.acceptance;
+    const stamp = ac.status === "aceito" ? '<span class="stamp ok">Aceito em ' + fdate(ac.acceptedOn) + "</span>" + (altered ? '<span class="stamp draft">com alterações posteriores</span>' : "") : '<span class="stamp draft">Rascunho: ainda não aceito</span>';
+    let h = '<div class="ips-doc"><div class="ips-title"><div class="kicker">Declaração de política de planejamento</div><h3>Compromisso de planejamento financeiro ' + stamp + "</h3></div>";
+    h += "<h4>1. Identificação</h4><dl class=\"kv\">" + kv("Cliente", id.client || "—") + kv("Planejador", id.planner ? id.planner + (id.cert ? " · " + id.cert : "") : "—") +
+      kv("Autorização de consultor (CVM)", id.cvm === "sim" ? "Possui" + (id.cvmNo ? " · " + id.cvmNo : "") : "Não possui; este documento não recomenda valores mobiliários") + kv("Data", fdate(id.date)) + kv("Revisão do plano", "a cada " + id.reviewMonths + " meses; próxima em " + fdate(id.nextReview)) + "</dl>";
+    h += '<h4>2. Situação na data</h4><dl class="kv">' + m.situation.map((x) => kv(x.label, x.value)).join("") + "</dl>";
+    h += "<h4>3. Objetivos do cliente</h4>" + (m.objectives.length ? "<ul>" + m.objectives.map((o) => "<li><b>" + esc(o.label) + ".</b> " + esc(o.detail) + "</li>").join("") + "</ul>" : "<p>Nenhum objetivo cadastrado.</p>");
+    h += "<h4>4. Premissas do plano</h4><ul>" + m.assumptions.map((a) => "<li>" + esc(a) + "</li>").join("") + "</ul>";
+    h += "<h4>5. Compromissos assumidos</h4>" + (m.commitments.length ? '<table><thead><tr><th>#</th><th>Compromisso</th><th>Valor</th><th>Prazo</th><th>Responsável</th></tr></thead><tbody>' + m.commitments.map((x, i) => "<tr><td>" + (i + 1) + "</td><td>" + esc(x.text) + '</td><td class="r">' + esc(commitValue(x)) + '</td><td class="r">' + esc(fdate(x.due)) + "</td><td>" + esc(label(L_OWNER, x.owner)) + "</td></tr>").join("") + "</tbody></table>" : "<p>Nenhum compromisso incluído.</p>");
+    h += "<h4>6. Regras de decisão e revisão</h4><table><thead><tr><th>Regra</th><th>Critério</th><th>Hoje</th></tr></thead><tbody>" + m.rules.map((r) => "<tr><td><b>" + esc(r.label) + "</b></td><td>" + esc(r.rule) + "</td><td>" + (r.current ? esc(r.current) : "") + (r.status === "ok" ? ' <span class="badge good">dentro</span>' : r.status === "crit" ? ' <span class="badge critical">fora</span>' : "") + "</td></tr>").join("") + "</tbody></table>";
+    h += '<h4>7. Responsabilidades</h4><div class="two"><div><b>Do cliente</b><ul>' + m.responsibilities.client.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul></div><div><b>Do planejador</b><ul>" + m.responsibilities.planner.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul></div></div>";
+    h += '<h4>8. Escopo, remuneração e conflitos de interesse</h4><dl class="kv">' + kv("Escopo do serviço", m.scope.scope || "[preencher na Abertura]", true) + kv("Remuneração", m.scope.fee || "[preencher na Abertura]", true) + kv("Conflitos de interesse", m.scope.conflicts || "[preencher na Abertura]", true) + "</dl>";
+    h += "<h4>9. Investimentos</h4>";
+    if (inv.mode === "autorizado") {
+      h += "<p>Diretrizes de responsabilidade do consultor autorizado" + (inv.profileDate ? "; perfil de investidor de " + fdate(inv.profileDate) : "") + ".</p><p style=\"white-space:pre-wrap\">" + esc(inv.policy || "[diretrizes não preenchidas]") + "</p>";
+      if (inv.tolerance || inv.drawdown) h += "<p>Percepção de risco declarada: " + esc(TOL_TXT[inv.tolerance] || "não informada") + "; queda suportada sem mudar o plano: " + pct1(inv.drawdown) + ".</p>";
+    } else {
+      h += "<p>Este documento <b>não define alocação de ativos nem recomenda valores mobiliários</b>: o planejador não possui autorização de consultor da CVM. A escolha dos investimentos cabe ao cliente, com profissional habilitado. As necessidades e restrições abaixo orientam essa escolha:</p><ul>" + inv.needs.map((n) => "<li><b>" + esc(n.label) + ":</b> " + esc(n.detail) + "</li>").join("") + "</ul>";
+      h += "<p>Percepção de risco declarada pelo cliente: " + esc(TOL_TXT[inv.tolerance] || "não informada") + "; queda do patrimônio financeiro que suportaria sem mudar o plano: " + pct1(inv.drawdown) + ".</p>";
+    }
+    if (state.ips.notes) h += "<h4>10. Observações</h4><p style=\"white-space:pre-wrap\">" + esc(state.ips.notes) + "</p>";
+    h += '<div class="keep"><h4>' + (state.ips.notes ? "11" : "10") + ". Aviso</h4><p style=\"font-size:11.5px;color:var(--ink-secondary)\">" + m.disclaimer.lines.map(esc).join(" ") + "</p>";
+    h += '<div class="sign"><div>' + esc(id.client || "Cliente") + "<br>Cliente · data: ____/____/________</div><div>" + esc(id.planner || "Planejador") + "<br>Planejador · data: ____/____/________</div></div></div>";
+    if (ac.status === "aceito") h += '<p style="margin-top:14px;font-size:11.5px;color:var(--ink-muted)">Aceite registrado na ferramenta em ' + fdate(ac.acceptedOn) + ". Os valores acima correspondem ao plano nessa data.</p>";
+    return h + "</div>";
+  }
+  function acceptedVersion() { return state.ips.acceptedVersion ? state.versions.find((v) => v.id === state.ips.acceptedVersion) || null : null; }
+
+  function acceptIps() {
+    const toast = $("ipsToast");
+    if (state.versions.length >= Engine.MAX_VERSIONS) { const i = state.versions.findIndex((x) => x.auto); if (i >= 0) state.versions.splice(i, 1); }
+    if (state.versions.length >= Engine.MAX_VERSIONS) { toast.textContent = "Limite de " + Engine.MAX_VERSIONS + " versões: exclua uma na aba Versões antes de registrar o aceite."; return; }
+    const iso = todayISO(), nextId = state.versions.reduce((mx, v) => Math.max(mx, v.id || 0), 0) + 1;
+    state.ips.status = "aceito"; state.ips.acceptedOn = iso; state.ips.acceptedVersion = nextId;
+    state.versions.push(Versions.make(state, "Compromisso aceito em " + fdate(iso), "Fotografia do plano no momento do aceite do IPS", new Date().toISOString(), false));
+    saveNow(); renderAll();
+    $("ipsToast").textContent = "Aceite registrado e versão guardada. Salve o PDF e um backup em arquivo.";
+  }
+  function reopenIps() { state.ips.status = "rascunho"; state.ips.acceptedOn = ""; saveNow(); renderAll(); $("ipsToast").textContent = "Documento reaberto como rascunho. A versão aceita continua guardada em Versões."; }
+
+  function suggestCommitments(refresh) {
+    const c = Synthesis.context(state), list = Synthesis.commitments(c, { taxVisited: taxSeen() });
+    let added = 0, updated = 0;
+    list.forEach((x) => {
+      const cur = state.commitments.find((y) => y.source === x.source);
+      if (!cur) { state.commitments.push(Object.assign({ id: rowSeq++ }, x)); added++; }
+      else if (refresh && (cur.text !== x.text || cur.value !== x.value)) { cur.text = x.text; cur.value = x.value; updated++; }
+    });
+    renderCards("commitments"); renderAll(); scheduleSave();
+    $("commitToast").textContent = refresh ? (updated ? updated + " compromisso(s) atualizado(s) com os números atuais." : "Os valores já estão atualizados.") : (added ? added + " compromisso(s) sugerido(s). Marque os que o cliente decidiu assumir." : "Nenhum compromisso novo: o plano atual já está coberto.");
+  }
+
+  function renderIps() {
+    const c = Synthesis.context(state), m = Synthesis.ipsModel(c, { taxVisited: taxSeen() }), av = acceptedVersion();
+    const ch = av ? Versions.changes(av.state, state).filter((x) => x.group !== "Compromissos") : [], chC = av ? Versions.changes(av.state, state).filter((x) => x.group === "Compromissos") : [];
+    const altered = !!av && (ch.length > 0 || chC.length > 0);
+    $("ipsWarnings").innerHTML = m.warnings.length ? '<div class="banner warn"><b>Antes de apresentar o documento:</b><ul>' + m.warnings.map((w) => "<li>" + esc(w) + "</li>").join("") + "</ul></div>" : '<div class="banner ok"><b>Sem pendências.</b> O documento está completo com os dados atuais.</div>';
+    $("ipsReserveHint").textContent = "Meses de despesas essenciais. Em branco: usa o valor calculado no Diagnóstico (" + fmtD(c.rs.months, 1) + " meses).";
+    $("ipsInvestForm").style.display = state.pro.cvm === "sim" ? "" : "none";
+    $("ipsDoc").innerHTML = ipsDocHTML(m, altered);
+    let a = "";
+    if (state.ips.status === "aceito") {
+      a += '<div class="banner ok" style="margin-bottom:10px"><b>Aceito em ' + fdate(state.ips.acceptedOn) + ".</b> " + (av ? "Versão guardada: “" + esc(av.name) + "”." : "A versão guardada no aceite não está mais na lista.") + "</div>";
+      if (altered) a += '<div class="banner warn"><b>Há alterações desde o aceite (' + (ch.length + chC.length) + "):</b><ul>" + ch.concat(chC).slice(0, 8).map((x) => "<li>" + esc(x.label) + (x.fmt === "text" && x.a == null && x.b == null ? "" : ": " + esc(fmtVal(x.fmt, x.a)) + " → " + esc(fmtVal(x.fmt, x.b))) + "</li>").join("") + (ch.length + chC.length > 8 ? "<li>… e mais " + (ch.length + chC.length - 8) + " (compare em Versões)</li>" : "") + "</ul>Se o cliente concordou com as mudanças, registre um novo aceite.</div>";
+      a += '<div class="actions"><button class="btn" id="btnIpsRenew" type="button">Registrar novo aceite</button><button class="btn ghost" id="btnIpsReopen" type="button">Reabrir para edição</button><button class="btn ghost" id="btnIpsBackup" type="button"' + (downloadsNS ? "" : " hidden") + '>Salvar backup (.json)</button><span class="toast" id="ipsToast"></span></div>';
+    } else {
+      const blocked = !state.client.name || !m.commitments.length;
+      a += '<div class="card-hint" style="padding:0 0 10px">O aceite guarda uma fotografia completa do plano em <b>Versões</b>, para comparar nas revisões. Registre-o só depois de o cliente ler o documento acima e concordar.</div>';
+      a += '<div class="actions"><button class="btn" id="btnIpsAccept" type="button"' + (blocked ? " disabled" : "") + '>Registrar aceite do cliente</button><span class="toast" id="ipsToast">' + (blocked ? "Informe o nome do cliente e inclua ao menos um compromisso." : "") + "</span></div>";
+    }
+    $("ipsAccept").innerHTML = a;
+    const arm = (id, lbl, fn) => { const b = $(id); if (b) armed(b, lbl, fn); };
+    arm("btnIpsAccept", "Clique de novo: registrar o aceite", acceptIps);
+    arm("btnIpsRenew", "Clique de novo: registrar novo aceite", acceptIps);
+    arm("btnIpsReopen", "Clique de novo: reabrir como rascunho", reopenIps);
+    const bk = $("btnIpsBackup"); if (bk) bk.addEventListener("click", exportBackup);
+  }
+
   /* ================= abas, render global e tema ================= */
-  const TABS = ["diag", "obj", "cx", "prot", "succ", "apos", "irm", "ira", "pgbl", "plan", "ver"];
-  let active = "apos";
+  let active = "open";
   try { const t = localStorage.getItem(TABKEY); if (TABS.includes(t)) active = t; } catch (e) { /* ignore */ }
-  const RENDER = { diag: renderDiag, obj: renderObj, cx: renderCx, prot: renderProt, succ: renderSucc, apos: renderApos, irm: renderIrm, ira: renderIra, pgbl: renderPgbl, plan: renderPlan, ver: renderVer };
+  const RENDER = { open: renderOpen, diag: renderDiag, obj: renderObj, cx: renderCx, prot: renderProt, succ: renderSucc, apos: renderApos, irm: renderIrm, ira: renderIra, pgbl: renderPgbl, syn: renderSyn, plan: renderPlan, ips: renderIps, ver: renderVer };
   function renderAll() {
     document.querySelectorAll("[data-client-line]").forEach((el) => { el.textContent = state.client.name ? "Cliente: " + state.client.name : "Cenário sem nome de cliente"; });
     $("whoLine").textContent = state.client.name || "";
     const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
     document.querySelectorAll("[data-today]").forEach((el) => { el.textContent = today; });
     RENDER[active]();
-    renderDisclaimers(); renderDataSafety();
+    renderStages(); renderStepNav(); renderDisclaimers(); renderDataSafety();
     const bk = $("backupExport").closest("details"); if (bk && bk.open) $("backupExport").value = JSON.stringify(state, null, 2);
   }
+  function markSeen(t) { if (state.meeting.seen[t] === false) { state.meeting.seen[t] = true; scheduleSave(); } }
+  function syncBarHeight() { const h = $("appbar").offsetHeight; if (h) document.documentElement.style.setProperty("--topbar", h + "px"); }
   function setTab(t) {
-    active = t;
+    if (!TABS.includes(t)) return;
+    active = t; markSeen(t);
+    const sid = stageOf(t), g = STAGES.find((x) => x.id === sid), multi = !!g && g.panes.length > 1;
+    if (sid) stageLast[sid] = t;
+    document.querySelectorAll(".stage").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.stage ? b.dataset.stage === sid : b.dataset.tab === t)));
     document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    $("substrip").classList.toggle("on", multi);
+    document.querySelectorAll(".sub-group").forEach((gr) => gr.classList.toggle("on", multi && gr.dataset.stage === sid));
     document.querySelectorAll(".pane").forEach((pn) => pn.classList.toggle("active", pn.id === "pane-" + t));
+    syncBarHeight();
+    const cur = document.querySelector('#stages .stage[aria-selected="true"]'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
     try { localStorage.setItem(TABKEY, t); } catch (e) { /* ignore */ }
-    const sel = document.querySelector('.tab[data-tab="' + t + '"]'), box = $("tabs");
-    if (sel && box) box.scrollLeft = Math.max(0, sel.offsetLeft - (box.clientWidth - sel.offsetWidth) / 2);
+    const pane = $("pane-" + t); if (pane) { const sc = pane.querySelector(".canvas") || pane; sc.scrollTop = 0; }
     renderAll();
   }
+  const stageTarget = (b) => (b.dataset.stage ? stageLast[b.dataset.stage] || STAGES.find((x) => x.id === b.dataset.stage).panes[0] : b.dataset.tab);
+  document.querySelectorAll(".stage").forEach((b) => {
+    b.title = b.dataset.stage ? STAGES.find((x) => x.id === b.dataset.stage).ask : "Fotografias do plano e comparação entre versões";
+    b.addEventListener("click", () => setTab(stageTarget(b)));
+    b.addEventListener("keydown", (e) => {
+      const all = [...document.querySelectorAll(".stage")], i = all.indexOf(b);
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const n = all[(i + (e.key === "ArrowRight" ? 1 : all.length - 1)) % all.length]; n.focus(); setTab(stageTarget(n)); }
+    });
+  });
   document.querySelectorAll(".tab").forEach((b) => {
     b.addEventListener("click", () => setTab(b.dataset.tab));
     b.addEventListener("keydown", (e) => {
-      const tabs = [...document.querySelectorAll(".tab")], i = tabs.indexOf(b);
+      const tabs = [...b.parentElement.querySelectorAll(".tab")], i = tabs.indexOf(b);
       if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const n = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length]; n.focus(); setTab(n.dataset.tab); }
     });
   });
+  document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-go]"); if (b && TABS.includes(b.dataset.go)) setTab(b.dataset.go); });
+  window.addEventListener("resize", syncBarHeight);
   $("scenarioPick").addEventListener("change", renderAll);
   let themeTimer = null;
   const rerenderTheme = () => { clearTimeout(themeTimer); themeTimer = setTimeout(renderAll, 80); };
@@ -2725,11 +3160,13 @@ if (typeof module !== "undefined") module.exports = Versions;
   if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerenderTheme);
 
   /* ================= backup, privacidade e arquivos ================= */
+  const PDF_SHEETS = { btnPdfDiag: ["sheetDiag", "asset-planning-diagnostico.pdf"], btnPdfPlan: ["sheetPlan", "asset-planning-plano-de-acao.pdf"], btnPdfApos: ["sheetApos", "asset-planning-aposentadoria.pdf"], btnPdfIrm: ["sheetIrm", "asset-planning-irpf-mensal.pdf"], btnPdfIra: ["sheetIra", "asset-planning-irpf-anual-pgbl.pdf"], btnPdfPgbl: ["sheetPgbl", "asset-planning-pgbl-longo-prazo.pdf"], btnPdfObj: ["sheetObj", "asset-planning-objetivos.pdf"], btnPdfCx: ["sheetCx", "asset-planning-caixa-e-dividas.pdf"], btnPdfProt: ["sheetProt", "asset-planning-protecao.pdf"], btnPdfSucc: ["sheetSucc", "asset-planning-sucessao.pdf"], btnPdfVer: ["sheetVer", "asset-planning-versoes.pdf"], btnPdfSyn: ["sheetSyn", "asset-planning-diagnostico-final.pdf"], btnPdfIps: ["sheetIps", "asset-planning-ips-compromisso.pdf"] };
   let downloadsNS = null;
   function updateDownloadUI() {
     const has = !!downloadsNS, pdfOk = has && typeof window.html2pdf === "function";
-    $("btnExportFile").hidden = !has;
-    ["btnPdfDiag", "btnPdfApos", "btnPdfIrm", "btnPdfIra", "btnPdfPgbl", "btnPdfPlan", "btnPdfObj", "btnPdfCx", "btnPdfProt", "btnPdfSucc", "btnPdfVer"].forEach((id) => { $(id).hidden = !pdfOk; });
+    $("btnExportFile").hidden = !has; $("btnBackupOpen").hidden = !has;
+    const ib = $("btnIpsBackup"); if (ib) ib.hidden = !has;
+    Object.keys(PDF_SHEETS).forEach((id) => { $(id).hidden = !pdfOk; });
   }
   // Fora do claude.ai (arquivo aberto no navegador, site próprio): o salvamento vira um download comum.
   function anchorSave(opts) {
@@ -2787,10 +3224,12 @@ if (typeof module !== "undefined") module.exports = Versions;
 
   function dlError(e) { say(e && e.code === "declined" ? "Salvamento cancelado." : "Não foi possível salvar o arquivo neste ambiente."); }
 
-  $("btnExportFile").addEventListener("click", async () => {
+  async function exportBackup() {
     if (!downloadsNS) return;
     try { await downloadsNS.save({ filename: "asset-planning-backup.json", data: JSON.stringify(state, null, 2) }); markBackup(); say("Backup salvo."); } catch (e) { dlError(e); }
-  });
+  }
+  $("btnExportFile").addEventListener("click", exportBackup);
+  $("btnBackupOpen").addEventListener("click", exportBackup);
 
   // PDF: campos de formulário viram texto que quebra linha (input/textarea cortam texto longo); "Como ler" aberto
   function flattenForPdf(root) {
@@ -2811,12 +3250,11 @@ if (typeof module !== "undefined") module.exports = Versions;
     });
   }
 
-  const PDF_SHEETS = { btnPdfDiag: ["sheetDiag", "asset-planning-diagnostico.pdf"], btnPdfPlan: ["sheetPlan", "asset-planning-plano-de-acao.pdf"], btnPdfApos: ["sheetApos", "asset-planning-aposentadoria.pdf"], btnPdfIrm: ["sheetIrm", "asset-planning-irpf-mensal.pdf"], btnPdfIra: ["sheetIra", "asset-planning-irpf-anual-pgbl.pdf"], btnPdfPgbl: ["sheetPgbl", "asset-planning-pgbl-longo-prazo.pdf"], btnPdfObj: ["sheetObj", "asset-planning-objetivos.pdf"], btnPdfCx: ["sheetCx", "asset-planning-caixa-e-dividas.pdf"], btnPdfProt: ["sheetProt", "asset-planning-protecao.pdf"], btnPdfSucc: ["sheetSucc", "asset-planning-sucessao.pdf"], btnPdfVer: ["sheetVer", "asset-planning-versoes.pdf"] };
   Object.keys(PDF_SHEETS).forEach((id) => {
     $(id).addEventListener("click", async () => {
       if (!downloadsNS || typeof window.html2pdf !== "function") return;
       const btn = $(id), el = $(PDF_SHEETS[id][0]), root = document.documentElement, prev = root.getAttribute("data-theme");
-      const prevStyle = el.getAttribute("style");
+      const prevStyle = el.getAttribute("style"), idleTxt = btn.textContent;
       btn.disabled = true; btn.textContent = "Gerando PDF…";
       root.setAttribute("data-theme", "light"); document.body.classList.add("pdf-mode");
       el.style.width = "732px"; el.style.maxWidth = "732px";  // margens laterais de 8,05 mm = 732,9 px: largura do canvas = 733 = clientWidth, sem deriva nas quebras de página
@@ -2833,7 +3271,7 @@ if (typeof module !== "undefined") module.exports = Versions;
         document.body.classList.remove("pdf-mode");
         if (prevStyle === null) el.removeAttribute("style"); else el.setAttribute("style", prevStyle);
         document.querySelectorAll(".html2pdf__overlay").forEach((n) => n.remove());
-        btn.disabled = false; btn.textContent = "Salvar relatório (PDF)";
+        btn.disabled = false; btn.textContent = idleTxt;
         renderAll();
       }
     });
@@ -2846,19 +3284,21 @@ if (typeof module !== "undefined") module.exports = Versions;
       clearTimeout(timer); timer = null; btn.textContent = idle; action();
     });
   }
-  function applyState(s) {
+  function applyState(s, toOpen) {
     state = s; recomputeRowSeq(); verSel = { a: null, b: "cur" };
-    fillAll(); Object.keys(ROW_UI).forEach(renderRows); Object.keys(CARD_UI).forEach(renderCards); renderAll(); saveNow();
+    fillAll(); Object.keys(ROW_UI).forEach(renderRows); Object.keys(CARD_UI).forEach(renderCards);
+    if (toOpen) setTab("open"); else { markSeen(active); renderAll(); }
+    saveNow();
   }
   $("btnImport").addEventListener("click", () => {
     const txt = $("backupImport").value.trim(); if (!txt) return;
-    try { const parsed = JSON.parse(txt); if (!parsed || typeof parsed !== "object") throw new Error("formato"); applyState(Engine.normalizeState(parsed)); $("backupImport").value = ""; say("Backup restaurado e validado."); }
+    try { const parsed = JSON.parse(txt); if (!parsed || typeof parsed !== "object") throw new Error("formato"); applyState(Engine.normalizeState(parsed), true); $("backupImport").value = ""; say("Backup restaurado e validado."); }
     catch (e) { say("Não foi possível ler este backup: o texto está incompleto ou não é um JSON válido."); }
   });
-  armed($("btnReset"), "Clique de novo: substituir pelo exemplo", () => applyState(Engine.normalizeState(null)));
+  armed($("btnReset"), "Clique de novo: substituir pelo exemplo", () => applyState(Engine.normalizeState(null), true));
   armed($("btnWipe"), "Clique de novo: apagar tudo", () => {
     try { localStorage.removeItem(KEY); localStorage.removeItem(LEGACY); localStorage.removeItem(TABKEY); } catch (e) { /* ignore */ }
-    applyState(Engine.normalizeState(null)); try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+    applyState(Engine.normalizeState(null), true); try { localStorage.removeItem(KEY); localStorage.removeItem(TABKEY); } catch (e) { /* ignore */ }
     say("Dados apagados deste navegador. O exemplo padrão está carregado na tela (não salvo).");
   });
 
@@ -2885,10 +3325,11 @@ if (typeof module !== "undefined") module.exports = Versions;
     renderCards("taxRows"); renderAll(); scheduleSave(); say(state.taxRows.length ? "Linhas criadas por palavras-chave do nome: revise tipo, % de ganho e anos." : "Nenhum ativo de aposentadoria no Diagnóstico.");
   });
   { const bk = $("backupExport").closest("details"); if (bk) bk.addEventListener("toggle", () => { if (bk.open) $("backupExport").value = JSON.stringify(state, null, 2); }); }
+  $("suggestCommit").addEventListener("click", () => suggestCommitments(false));
+  armed($("refreshCommit"), "Clique de novo: atualizar valores", () => suggestCommitments(true));
+  FLOW.forEach((t) => { const sh = document.querySelector("#pane-" + t + " .sheet"); if (sh) { const nav = document.createElement("div"); nav.className = "stepnav no-pdf"; sh.appendChild(nav); } });
   fillAll(); wireFields(); Object.keys(ROW_UI).forEach(renderRows); Object.keys(CARD_UI).forEach(renderCards);
-  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === active)));
-  document.querySelectorAll(".pane").forEach((pn) => pn.classList.toggle("active", pn.id === "pane-" + active));
-  renderAll(); saveNow();
+  setTab(active); saveNow();
 })();
 /* APP:END */
 

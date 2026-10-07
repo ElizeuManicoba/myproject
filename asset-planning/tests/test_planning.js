@@ -98,7 +98,7 @@ ok("texto longo é limitado", dirty.memos[0].problem.length === 2000 && dirty.me
 ok("cvm inválido → nao; qualidade inválida → declarada", dirty.pro.cvm === "nao" && dirty.quality.liquid === "declarada");
 ok("valor com vírgula em linha", dirty.diag.bsAssets[0].value === 1000.5);
 const old = E.normalizeState({ profile: { currentAge: 50 }, extraMonthly: [{ ageFrom: 50, ageTo: 60, value: -1 }] });
-ok("estado antigo migra com diagnóstico vazio (não inventa dados) e blocos novos padrão", old.diag.bsAssets.length === 0 && old.stress.cons.dRet === -1.5 && old.meta.version === 5);
+ok("estado antigo migra com diagnóstico vazio (não inventa dados) e blocos novos padrão", old.diag.bsAssets.length === 0 && old.stress.cons.dRet === -1.5 && old.meta.version === 6);
 ok("estado novo (null) traz o exemplo completo", E.normalizeState(null).diag.bsAssets.length === 9 && E.normalizeState(null).diag.flow.length === 10);
 
 console.log(fails === 0 ? "\nTODOS OS TESTES PASSARAM" : "\n" + fails + " FALHA(S)");

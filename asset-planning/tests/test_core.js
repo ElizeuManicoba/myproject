@@ -75,7 +75,7 @@ ok("aporte acima da capacidade → aviso", E.validate((() => { const q = clone(s
 ok("retorno real ≤ 0 após aposentar: preservar é inviável (X infinito)", (() => { const q = clone(s); q.rates.differentiate = true; q.rates.nominalPost = 5; q.rates.inflationPost = 5.5; return !isFinite(E.analyze(q, 0).preserve.X); })());
 
 // ---- normalização/importação
-ok("normalizeState(null) = exemplo", E.normalizeState(null).meta.version === 5 && E.normalizeState(null).profile.currentAge === 45);
+ok("normalizeState(null) = exemplo", E.normalizeState(null).meta.version === 6 && E.normalizeState(null).profile.currentAge === 45);
 ok("campos numéricos em texto pt-BR são lidos na importação", E.normalizeState({ assets: { liquid: "1.500.000,50" } }).assets.liquid === 1500000.5);
 ok("campos desconhecidos são descartados (sem poluição de protótipo)", (() => { const n = E.normalizeState(JSON.parse('{"__proto__":{"x":1},"constructor":{"y":2},"foo":1}')); return n.foo === undefined && ({}).x === undefined && ({}).y === undefined; })());
 ok("estado antigo sem 'executed' deriva do fluxo (receita − despesa)", E.normalizeState({ cashflow: { income: 20000, expense: 15000 } }).cashflow.executed === 5000);

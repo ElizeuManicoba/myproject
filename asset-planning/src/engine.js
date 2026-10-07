@@ -28,7 +28,7 @@ const Engine = (function () {
 
   function defaultState() {
     return {
-      meta: { version: 5 },
+      meta: { version: 6 },
       client: { name: "" },
       profile: { currentAge: 45, retireAge: 65, horizonAge: 100 },
       assets: { illiquid: 1000000, liquid: 1000000, illiquidRealGrowth: 0, debts: 40000 },
@@ -93,6 +93,11 @@ const Engine = (function () {
         finalFixed: 20000, estatePct: 4, debtsPaid: true, transitionMonths: 6, includeEducation: true, existingLife: 0,
         disabPension: 0, careMonthly: 0, careYears: 20, existingDisab: 0, usePct: 0, rate: 3
       },
+      meeting: { date: "", participants: "", purpose: "", docs: { extratos: false, irpf: false, dividas: false, apolices: false, previdencia: false, imoveis: false, despesas: false, testamento: false },
+        seen: { open: false, diag: false, obj: false, cx: false, prot: false, apos: false, succ: false, irm: false, ira: false, pgbl: false, syn: false, plan: false, ips: false } },
+      risk: { tolerance: "", drawdown: 20, notes: "" },
+      ips: { status: "rascunho", acceptedOn: "", acceptedVersion: 0, reviewMonths: 12, coverageMin: 90, reserveMonths: null, drawdownTrigger: 20, spendCut: 10, events: "Mudança de emprego ou de renda; nascimento ou saída de dependente; herança, venda ou compra relevante de bens; separação ou falecimento; mudança relevante na legislação tributária.", profileDate: "", investmentPolicy: "", notes: "" },
+      commitments: [],
       mc: { sims: 2000, vol: 10, dist: "normal", seed: 1, scenario: "atual" },
       succ: { spouse: true, regime: "comunhao_parcial", commonPct: 100, heirs: 2, itcmd: 4, fees: 4, costs: 1.5, months: 6, carry: 1500, pensionOverride: null },
       versions: [],
@@ -117,7 +122,8 @@ const Engine = (function () {
     memos: { title: "", frame: "planejamento", problem: "", evidence: "", alternatives: "", chosen: "", assumptions: "", risks: "", inaction: "", owner: "", review: "", actionId: 0 },
     phaseRows: { ageFrom: 75, pct: 100, health: 0, label: "" },
     taxRows: { label: "", kind: "tributavel", value: 0, gainPct: 50, regime: "regressivo", years: 10, monthly: 0 },
-    goals: { label: "", kind: "outro", amount: 0, year: 0, priority: "importante", saved: 0, rate: null }
+    goals: { label: "", kind: "outro", amount: 0, year: 0, priority: "importante", saved: 0, rate: null },
+    commitments: { text: "", kind: "outro", value: 0, freq: "mensal", due: "", owner: "cliente", include: true, source: "" }
   };
   const QUALITY = ["confirmada", "declarada", "estimada", "pendente"];
   const ENUMS = {
@@ -129,12 +135,13 @@ const Engine = (function () {
     "actions.priority": ["critica", "alta", "media", "baixa"], "actions.owner": ["cliente", "planejador", "especialista"],
     "actions.status": ["nao_iniciada", "em_curso", "bloqueada", "concluida"], "memos.frame": ["planejamento", "valores_mobiliarios"],
     "taxRows.kind": ["pgbl", "vgbl", "tributavel", "isento"], "taxRows.regime": ["regressivo", "progressivo"],
+    "commitments.kind": ["aporte", "reserva", "divida", "meta", "protecao", "sucessao", "tributario", "dados", "comportamento", "outro"], "commitments.freq": ["mensal", "anual", "unico", "na"], "commitments.owner": ["cliente", "planejador", "especialista"],
     "goals.kind": ["educacao", "imovel", "veiculo", "viagem", "familia", "negocio", "saude", "outro"], "goals.priority": ["essencial", "importante", "desejo"]
   };
   const STRATEGIES = ["avalanche", "bola", "fluxo"];
   const MC_DISTS = ["normal", "tstudent"], MC_SCEN = ["atual", "consumir"], REGIMES = ["comunhao_parcial", "comunhao_universal", "separacao", "participacao"];
   const MAX_VERSIONS = 12;
-  const MAXLEN = { problem: 2000, evidence: 2000, alternatives: 2000, chosen: 2000, assumptions: 2000, risks: 2000, inaction: 1000, scope: 1000, fee: 500, conflicts: 1000, dep: 300, cost: 200, next: 400, title: 160 };
+  const MAXLEN = { text: 300, source: 60, participants: 300, purpose: 600, events: 600, investmentPolicy: 2000, notes: 1000, problem: 2000, evidence: 2000, alternatives: 2000, chosen: 2000, assumptions: 2000, risks: 2000, inaction: 1000, scope: 1000, fee: 500, conflicts: 1000, dep: 300, cost: 200, next: 400, title: 160 };
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
   function coerce(def, src, key) {
@@ -180,6 +187,17 @@ const Engine = (function () {
     Object.keys(out.quality).forEach(function (k) { if (QUALITY.indexOf(out.quality[k]) === -1) out.quality[k] = "declarada"; });
     if (["nao", "sim"].indexOf(out.pro.cvm) === -1) out.pro.cvm = "nao";
     if (STRATEGIES.indexOf(out.debtPlan.strategy) === -1) out.debtPlan.strategy = "avalanche";
+    if (["", "conservadora", "moderada", "arrojada"].indexOf(out.risk.tolerance) === -1) out.risk.tolerance = "";
+    out.risk.drawdown = Math.min(90, Math.max(0, out.risk.drawdown));
+    if (["rascunho", "aceito"].indexOf(out.ips.status) === -1) out.ips.status = "rascunho";
+    ["acceptedOn", "profileDate"].forEach(function (k) { if (out.ips[k] && !DATE_RE.test(out.ips[k])) out.ips[k] = ""; });
+    if (out.meeting.date && !DATE_RE.test(out.meeting.date)) out.meeting.date = "";
+    out.ips.acceptedVersion = Math.max(0, Math.round(out.ips.acceptedVersion) || 0);
+    out.ips.reviewMonths = Math.min(60, Math.max(3, Math.round(out.ips.reviewMonths) || 12));
+    out.ips.coverageMin = Math.min(200, Math.max(0, out.ips.coverageMin));
+    out.ips.drawdownTrigger = Math.min(80, Math.max(0, out.ips.drawdownTrigger));
+    out.ips.spendCut = Math.min(60, Math.max(0, out.ips.spendCut));
+    if (out.ips.reserveMonths != null) out.ips.reserveMonths = Math.min(60, Math.max(0, out.ips.reserveMonths));
     if (MC_DISTS.indexOf(out.mc.dist) === -1) out.mc.dist = "normal";
     if (MC_SCEN.indexOf(out.mc.scenario) === -1) out.mc.scenario = "atual";
     out.mc.sims = Math.min(10000, Math.max(200, Math.round(out.mc.sims) || 2000));
@@ -193,7 +211,7 @@ const Engine = (function () {
     out.succ.carry = Math.max(0, out.succ.carry);
     if (!(raw && raw.protect)) Object.assign(out.protect, { deps: 0, supportYears: 10, survivorIncome: 0, needPct: 75, pension: 0, finalFixed: 0, estatePct: 0, transitionMonths: 6, existingLife: 0, disabPension: 0, careMonthly: 0, existingDisab: 0, usePct: 0 }); // estado antigo: não injeta números de exemplo
     out.versions = sanitizeVersions(raw && raw.versions);
-    out.meta.version = 5;
+    out.meta.version = 6;
     return out;
   }
 

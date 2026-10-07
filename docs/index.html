@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<meta name="build-id" content="99ab3deeb5">
+<meta name="build-id" content="660de8bbea">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#f2f4ee" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#131512" media="(prefers-color-scheme: dark)">
@@ -19,28 +19,116 @@
 <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
+<header class="appbar" id="appbar">
 <div class="topbar">
   <div class="brand">
     <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke="var(--brand)" stroke-width="1.6"/><path d="M6.8 15.4 10.2 11.6 12.9 13.8 17.4 8.4" stroke="var(--brand)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.3" fill="var(--brand)"/></svg>
     <div><div class="name">Asset Planning</div><div class="tag">Planejamento patrimonial e tributário</div></div>
   </div>
-  <div class="tabs" role="tablist" id="tabs">
-    <button class="tab" role="tab" data-tab="diag" aria-selected="false">Diagnóstico</button>
-    <button class="tab" role="tab" data-tab="obj" aria-selected="false">Objetivos</button>
+  <nav class="stages" id="stages" role="tablist" aria-label="Etapas da reunião">
+    <button class="stage" role="tab" data-stage="open" data-tab="open" aria-selected="false"><span class="num">1</span><span class="lbl">Abertura</span></button>
+    <button class="stage" role="tab" data-stage="diag" data-tab="diag" aria-selected="false"><span class="num">2</span><span class="lbl">Diagnóstico</span></button>
+    <button class="stage" role="tab" data-stage="obj" data-tab="obj" aria-selected="false"><span class="num">3</span><span class="lbl">Objetivos</span></button>
+    <button class="stage" role="tab" data-stage="ana" aria-selected="false"><span class="num">4</span><span class="lbl">Análises</span></button>
+    <button class="stage" role="tab" data-stage="tax" aria-selected="false"><span class="num">5</span><span class="lbl">Tributação</span></button>
+    <button class="stage" role="tab" data-stage="syn" aria-selected="false"><span class="num">6</span><span class="lbl">Síntese e plano</span></button>
+    <button class="stage" role="tab" data-stage="ips" data-tab="ips" aria-selected="false"><span class="num">7</span><span class="lbl">Compromisso</span></button>
+  </nav>
+  <div class="grow"></div>
+  <button class="stage util" role="tab" data-tab="ver" aria-selected="false"><span class="lbl">Versões</span></button>
+  <div class="who" id="whoLine"></div>
+</div>
+<div class="substrip" id="substrip" role="tablist" aria-label="Telas da etapa">
+  <div class="sub-group" data-stage="ana">
     <button class="tab" role="tab" data-tab="cx" aria-selected="false">Caixa e dívidas</button>
     <button class="tab" role="tab" data-tab="prot" aria-selected="false">Proteção</button>
-    <button class="tab" role="tab" data-tab="succ" aria-selected="false">Sucessão</button>
     <button class="tab" role="tab" data-tab="apos" aria-selected="true">Aposentadoria</button>
-    <span class="tab-sep" aria-hidden="true"></span>
+    <button class="tab" role="tab" data-tab="succ" aria-selected="false">Sucessão</button>
+  </div>
+  <div class="sub-group" data-stage="tax">
     <button class="tab" role="tab" data-tab="irm" aria-selected="false">IRPF mensal</button>
     <button class="tab" role="tab" data-tab="ira" aria-selected="false">IRPF anual &amp; PGBL</button>
     <button class="tab" role="tab" data-tab="pgbl" aria-selected="false">PGBL no longo prazo</button>
-    <span class="tab-sep" aria-hidden="true"></span>
-    <button class="tab" role="tab" data-tab="plan" aria-selected="false">Plano de ação</button>
-    <button class="tab" role="tab" data-tab="ver" aria-selected="false">Versões</button>
   </div>
-  <div class="grow"></div>
-  <div class="who" id="whoLine"></div>
+  <div class="sub-group" data-stage="syn">
+    <button class="tab" role="tab" data-tab="syn" aria-selected="false">Diagnóstico final</button>
+    <button class="tab" role="tab" data-tab="plan" aria-selected="false">Plano de ação</button>
+  </div>
+</div>
+</header>
+
+<!-- ======================= ABERTURA ======================= -->
+<div class="pane pane-scroll" id="pane-open">
+  <div class="sheet narrow" id="sheetOpen">
+    <div class="masthead">
+      <div><h2>Abertura da reunião</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b></div>
+    </div>
+    <div class="banner info"><b>Como a reunião funciona.</b> A ferramenta segue as etapas da conversa: conhecer o cliente, diagnosticar, definir objetivos, analisar cada tema, decidir e, no fim, formalizar os compromissos. Preencha esta tela antes de começar; ao terminar, a etapa Compromisso gera o IPS de planejamento para o cliente assinar.</div>
+
+    <section class="block"><div class="eyebrow"><span>Roteiro da reunião</span></div><div id="roadmap"></div></section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Cliente e reunião</span></div>
+      <div class="form-card">
+        <div class="frow"><div class="fl">Nome do cliente<small>Ou um identificador, se preferir não usar o nome completo.</small></div><div class="fi" style="width:300px"><input type="text" maxlength="80" data-path="client.name" autocomplete="off" style="text-align:left"></div></div>
+        <div class="frow"><div class="fl">Data da reunião</div><div class="fi"><input type="date" data-path="meeting.date"></div></div>
+        <div class="frow"><div class="fl">Participantes<small>Quem está na reunião (ex.: casal, contador).</small></div><div class="fi" style="width:300px"><input type="text" maxlength="300" data-path="meeting.participants" autocomplete="off" style="text-align:left"></div></div>
+        <div class="frow"><div class="fl">Motivo e expectativas<small>O que o cliente espera sair desta reunião.</small></div><div class="fi" style="width:360px"><textarea rows="3" maxlength="600" data-path="meeting.purpose"></textarea></div></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Documentos que o cliente trouxe</span></div>
+      <div class="form-card">
+        <div class="card-hint">Marque o que já foi entregue. O que faltar vira sugestão de compromisso do cliente na etapa final (você decide se entra no documento). Dados marcados como “pendente” no Diagnóstico também viram compromisso.</div>
+        <div class="doc-grid">
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.extratos"><span>Extratos de contas e de investimentos</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.irpf"><span>Declaração de IRPF e recibo</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.dividas"><span>Contratos e saldos de dívidas</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.apolices"><span>Apólices de seguros e coberturas</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.previdencia"><span>Extratos de previdência privada</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.imoveis"><span>Escrituras e valores de imóveis</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.despesas"><span>Faturas e comprovantes de despesas</span></label>
+        <label class="switch-row" style="padding:5px 0"><input type="checkbox" data-path="meeting.docs.testamento"><span>Testamento, doações e regime de bens</span></label>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Percepção de risco do cliente</span></div>
+      <div class="form-card">
+        <div class="card-hint">Registro da conversa, usado só no planejamento. <b>Não é perfil de investidor</b> para fins de adequação de produtos (suitability), que é outro procedimento.</div>
+        <div class="frow"><div class="fl">Como o cliente se descreve diante de oscilações</div><div class="fi" style="width:230px"><select data-path="risk.tolerance"><option value="">Não informado</option><option value="conservadora">Conservadora: prefere previsibilidade</option><option value="moderada">Moderada: aceita oscilar um pouco</option><option value="arrojada">Arrojada: aceita oscilar bastante</option></select></div></div>
+        <div class="frow"><div class="fl">Queda do patrimônio financeiro que suportaria sem mudar o plano<small>Usada para checar os gatilhos de revisão do compromisso.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="risk.drawdown" data-pct="1"></div></div>
+        <div class="frow"><div class="fl">Observações</div><div class="fi" style="width:360px"><textarea rows="2" maxlength="1000" data-path="risk.notes"></textarea></div></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Profissional e escopo</span></div>
+      <div class="form-card">
+        <h3>Identificação usada no aviso legal de todos os relatórios</h3>
+        <div class="card-hint">Sem uma instituição por trás, estas informações são a sua proteção e a transparência devida ao cliente. Recomendações individualizadas de valores mobiliários exigem autorização própria da CVM (consultor): certificação, como o CFP, não substitui essa autorização. Confirme o enquadramento de cada serviço com um advogado de sua confiança.</div>
+        <div class="frow"><div class="fl">Nome do planejador ou escritório</div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.name" autocomplete="off"></div></div>
+        <div class="frow"><div class="fl">Certificações<small>Ex.: CFP®, CPA-20.</small></div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.cert"></div></div>
+        <div class="frow"><div class="fl">Autorização de consultor de valores mobiliários (CVM)</div><div class="fi" style="width:260px"><select data-path="pro.cvm"><option value="nao">Não possuo</option><option value="sim">Possuo</option></select></div></div>
+        <div class="frow"><div class="fl">Registro/número da autorização<small>Preencha se possuir.</small></div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.cvmNo"></div></div>
+        <div class="frow"><div class="fl">Escopo do serviço<small>O que está incluído e o que não está.</small></div><div class="fi" style="width:360px"><textarea rows="3" maxlength="1000" data-path="pro.scope"></textarea></div></div>
+        <div class="frow"><div class="fl">Remuneração</div><div class="fi" style="width:360px"><textarea rows="2" maxlength="500" data-path="pro.fee"></textarea></div></div>
+        <div class="frow"><div class="fl">Conflitos de interesse<small>Se não houver, escreva "nenhum conhecido".</small></div><div class="fi" style="width:360px"><textarea rows="2" maxlength="1000" data-path="pro.conflicts"></textarea></div></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="eyebrow"><span>Seus dados e backup</span></div>
+      <div class="form-card"><div class="card-hint">Tudo o que você digita fica neste aparelho. O backup em arquivo é a sua garantia contra perda e a forma de levar o plano para outro aparelho.</div>
+        <div class="data-safety-slot"></div>
+        <div class="card-actions no-pdf" style="padding-top:12px"><button class="btn-small primary" id="btnBackupOpen" type="button" hidden>Salvar backup agora (.json)</button></div>
+      </div>
+    </section>
+    <div class="disclaimer-slot"></div>
+  </div>
 </div>
 
 <!-- ======================= DIAGNÓSTICO ======================= -->
@@ -526,6 +614,50 @@
   </div>
 </div>
 
+<!-- ======================= COMPROMISSO (IPS) ======================= -->
+<div class="pane pane-scroll" id="pane-ips">
+  <div class="sheet narrow" id="sheetIps">
+    <div class="masthead">
+      <div><h2>Compromisso de planejamento (IPS)</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfIps" type="button" hidden>Salvar documento (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>O que é este documento.</b> Um IPS de planejamento: reúne o diagnóstico, os objetivos, os compromissos que o cliente assume, as regras para decidir quando o plano muda e as responsabilidades de cada lado. <b>Não escolhe investimentos</b>: não traz alocação de ativos nem recomendação de valores mobiliários, que exigem autorização da CVM. Escolha cada item do que entra, revise com o cliente e registre o aceite.</div>
+    <div id="ipsWarnings" class="no-pdf"></div>
+
+    <div class="form-card no-pdf">
+      <h3>Parâmetros das regras de decisão</h3>
+      <div class="frow"><div class="fl">Revisar o plano a cada<small>Meses entre as revisões ordinárias.</small></div><div class="fi"><input type="number" min="3" max="60" data-path="ips.reviewMonths"></div></div>
+      <div class="frow"><div class="fl">Cobertura mínima da renda desejada<small>Abaixo disso o plano é revisto.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="ips.coverageMin" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Reserva mínima de contingência<small id="ipsReserveHint">Meses de despesas essenciais. Em branco: usa o valor calculado no Diagnóstico.</small></div><div class="fi"><input type="number" min="0" max="60" step="0.5" data-path="ips.reserveMonths" data-nullable="1" placeholder="Calculado"></div></div>
+      <div class="frow"><div class="fl">Gatilho de queda do patrimônio financeiro<small>Queda em 12 meses que aciona a regra de ajuste.</small></div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="ips.drawdownTrigger" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Corte nos gastos discricionários quando o gatilho for acionado</div><div class="fi suffix-wrap" data-suffix="%"><input type="text" inputmode="decimal" data-path="ips.spendCut" data-pct="1"></div></div>
+      <div class="frow"><div class="fl">Eventos que exigem revisão fora do calendário</div><div class="fi" style="width:380px"><textarea rows="3" maxlength="600" data-path="ips.events"></textarea></div></div>
+      <div class="frow"><div class="fl">Observações do documento<small>Aparece no fim, antes das assinaturas.</small></div><div class="fi" style="width:380px"><textarea rows="2" maxlength="1000" data-path="ips.notes"></textarea></div></div>
+      <div id="ipsInvestForm">
+        <div class="frow"><div class="fl">Data do perfil de investidor<small>Com autorização da CVM: o perfil vale por até 24 meses.</small></div><div class="fi"><input type="date" data-path="ips.profileDate"></div></div>
+        <div class="frow"><div class="fl">Diretrizes de investimento<small>De responsabilidade do consultor autorizado; a ferramenta não as gera.</small></div><div class="fi" style="width:380px"><textarea rows="4" maxlength="2000" data-path="ips.investmentPolicy"></textarea></div></div>
+      </div>
+    </div>
+
+    <section class="block no-pdf">
+      <div class="eyebrow"><span>Compromissos</span></div>
+      <div class="form-card">
+        <div class="card-hint">Marque os compromissos que o cliente decidiu assumir; os desmarcados são opções e não entram no documento. Valor e prazo são editáveis. As sugestões nascem do diagnóstico e do plano.</div>
+        <div id="commitRows"></div>
+        <div class="card-actions"><button class="btn-add" id="addCommit" type="button">+ Compromisso</button><button class="btn-add" id="suggestCommit" type="button">Sugerir a partir do plano</button><button class="btn-add" id="refreshCommit" type="button">Atualizar valores</button><span class="toast" id="commitToast"></span></div>
+      </div>
+    </section>
+
+    <section class="block"><div class="eyebrow no-pdf"><span>O documento</span></div><div id="ipsDoc"></div></section>
+
+    <section class="block no-pdf">
+      <div class="eyebrow"><span>Aceite</span></div>
+      <div class="form-card" style="padding-bottom:14px"><div id="ipsAccept"></div></div>
+    </section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
 <!-- ======================= VERSÕES ======================= -->
 <div class="pane pane-scroll" id="pane-ver">
   <div class="sheet narrow" id="sheetVer">
@@ -699,6 +831,21 @@
   </div>
 </div>
 
+<!-- ======================= DIAGNÓSTICO FINAL ======================= -->
+<div class="pane pane-scroll" id="pane-syn">
+  <div class="sheet narrow" id="sheetSyn">
+    <div class="masthead">
+      <div><h2>Diagnóstico final</h2><div class="client" data-client-line>—</div></div>
+      <div class="prepared">Elaborado em <b data-today>—</b><div class="actions no-pdf" style="margin-top:8px; justify-content:flex-end"><button class="btn ghost" id="btnPdfSyn" type="button" hidden>Salvar relatório (PDF)</button></div></div>
+    </div>
+    <div class="banner info no-pdf"><b>O retrato de tudo o que foi visto.</b> Esta página junta os números de todas as etapas em um diagnóstico por área. Ela se atualiza sozinha; o que for decidido aqui vira o plano de ação e, depois, o compromisso do cliente.</div>
+    <section class="block keep"><div class="eyebrow"><span>Resumo</span></div><div id="synSummary"></div></section>
+    <section class="block"><div class="eyebrow"><span>Painel por área</span></div><div id="synAreas"></div></section>
+    <section class="block keep"><div class="eyebrow"><span>Decisões prioritárias</span></div><div id="synTop3"></div></section>
+    <div class="disclaimer-slot"></div>
+  </div>
+</div>
+
 <!-- ======================= PLANO DE AÇÃO ======================= -->
 <div class="pane pane-scroll" id="pane-plan">
   <div class="sheet narrow" id="sheetPlan">
@@ -725,20 +872,6 @@
       <div class="card-actions no-pdf"><button class="btn-add" id="addMemo" type="button">+ Memorando em branco</button> <button class="btn-add" id="addMemoRet" type="button">+ Rascunho: aposentadoria</button> <span class="toast" id="memoToast"></span></div>
     </section>
 
-    <section class="block no-pdf">
-      <div class="eyebrow"><span>Profissional e escopo</span></div>
-      <div class="form-card">
-        <h3>Identificação usada no aviso legal de todos os relatórios</h3>
-        <div class="card-hint">Sem uma instituição por trás, estas informações são a sua proteção e a transparência devida ao cliente. Recomendações individualizadas de valores mobiliários exigem autorização própria da CVM (consultor): certificação, como o CFP, não substitui essa autorização. Confirme o enquadramento de cada serviço com um advogado de sua confiança.</div>
-        <div class="frow"><div class="fl">Nome do planejador ou escritório</div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.name" autocomplete="off"></div></div>
-        <div class="frow"><div class="fl">Certificações<small>Ex.: CFP®, CPA-20.</small></div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.cert"></div></div>
-        <div class="frow"><div class="fl">Autorização de consultor de valores mobiliários (CVM)</div><div class="fi" style="width:260px"><select data-path="pro.cvm"><option value="nao">Não possuo</option><option value="sim">Possuo</option></select></div></div>
-        <div class="frow"><div class="fl">Registro/número da autorização<small>Preencha se possuir.</small></div><div class="fi" style="width:260px"><input type="text" maxlength="160" data-path="pro.cvmNo"></div></div>
-        <div class="frow"><div class="fl">Escopo do serviço<small>O que está incluído e o que não está.</small></div><div class="fi" style="width:360px"><textarea rows="3" maxlength="1000" data-path="pro.scope"></textarea></div></div>
-        <div class="frow"><div class="fl">Remuneração</div><div class="fi" style="width:360px"><textarea rows="2" maxlength="500" data-path="pro.fee"></textarea></div></div>
-        <div class="frow"><div class="fl">Conflitos de interesse<small>Se não houver, escreva "nenhum conhecido".</small></div><div class="fi" style="width:360px"><textarea rows="2" maxlength="1000" data-path="pro.conflicts"></textarea></div></div>
-      </div>
-    </section>
     <div class="disclaimer-slot"></div>
   </div>
 </div>

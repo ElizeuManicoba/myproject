@@ -26,7 +26,7 @@
   let rowSeq = 1;
   function recomputeRowSeq() {
     rowSeq = 1;
-    [state.extraMonthly, state.extraAnnual, state.retIncome, state.actions, state.memos, state.diag.bsAssets, state.diag.bsLiabilities, state.diag.flow, state.goals, state.phaseRows, state.taxRows].forEach((l) => l.forEach((r) => { rowSeq = Math.max(rowSeq, (r.id || 0) + 1); }));
+    [state.extraMonthly, state.extraAnnual, state.retIncome, state.actions, state.memos, state.diag.bsAssets, state.diag.bsLiabilities, state.diag.flow, state.goals, state.phaseRows, state.taxRows, state.commitments].forEach((l) => l.forEach((r) => { rowSeq = Math.max(rowSeq, (r.id || 0) + 1); }));
   }
   recomputeRowSeq();
 
@@ -119,7 +119,7 @@
       const evt = el.type === "checkbox" || el.tagName === "SELECT" ? "change" : "input";
       el.addEventListener(evt, () => {
         setPath(state, el.dataset.path, readField(el));
-        if (el.dataset.path === "irpf.vig") document.querySelectorAll('[data-path="irpf.vig"]').forEach((s) => { s.value = state.irpf.vig; });
+        document.querySelectorAll('[data-path="' + el.dataset.path + '"]').forEach((o) => { if (o !== el) fillField(o); });
         if (el.id === "differentiateChk") $("postRatesRow").style.display = el.checked ? "grid" : "none";
         if (el.dataset.path === "pro.cvm") renderCards("memos");
         renderAll(); scheduleSave();
@@ -201,6 +201,8 @@
   const L_GPRIO = [["essencial", "Essencial"], ["importante", "Importante"], ["desejo", "Desejo"]];
   const L_TAXKIND = [["pgbl", "PGBL"], ["vgbl", "VGBL"], ["tributavel", "Investimento tributável"], ["isento", "Isento de IR"]];
   const L_REGIME = [["regressivo", "Regressivo"], ["progressivo", "Progressivo"]];
+  const L_CKIND = [["aporte", "Aporte"], ["reserva", "Reserva"], ["divida", "Dívida"], ["meta", "Meta"], ["protecao", "Proteção"], ["sucessao", "Sucessão"], ["tributario", "Tributário"], ["dados", "Dados e documentos"], ["comportamento", "Comportamento"], ["outro", "Outro"]];
+  const L_CFREQ = [["mensal", "Por mês"], ["anual", "Por ano"], ["unico", "Valor único"], ["na", "Sem valor"]];
   const label = (list, k) => { const f = list.find((x) => x[0] === k); return f ? f[1] : k; };
   const todayISO = () => new Date().toLocaleDateString("sv-SE");
 
@@ -235,6 +237,12 @@
       make: () => ({ label: "", kind: "tributavel", value: 0, gainPct: 50, regime: "regressivo", years: 10, monthly: 0 }),
       fields: [{ k: "label", l: "Descrição", t: "text" }, { k: "kind", l: "Tipo", t: "select", opts: L_TAXKIND, w: 140 }, { k: "value", l: "Valor (R$)", t: "money", w: 108 }, { k: "gainPct", l: "% ganho", t: "pct", w: 72 }, { k: "regime", l: "Regime", t: "select", opts: L_REGIME, w: 108 }, { k: "years", l: "Anos", t: "int", w: 60 }, { k: "monthly", l: "Saque/mês (prog.)", t: "money", w: 112 }]
     },
+    commitments: {
+      path: "commitments", box: "commitRows", add: "addCommit", empty: "Nenhum compromisso ainda. Use “Sugerir a partir do plano” para começar.",
+      make: () => ({ text: "", kind: "outro", value: 0, freq: "na", due: "", owner: "cliente", include: true, source: "" }),
+      fields: [{ k: "text", l: "Compromisso", t: "textarea", span: 9, max: 300 }, { k: "include", l: "Entra no documento", t: "bool", span: 3, rerender: true }, { k: "kind", l: "Tipo", t: "select", opts: L_CKIND, span: 3 }, { k: "value", l: "Valor (R$)", t: "money", span: 3 }, { k: "freq", l: "Periodicidade", t: "select", opts: L_CFREQ, span: 2 }, { k: "due", l: "Prazo", t: "date", span: 2 }, { k: "owner", l: "Responsável", t: "select", opts: L_OWNER, span: 2 }],
+      cls: (r) => (r.include ? "" : "off")
+    },
     actions: {
       path: "actions", box: "actionRows", add: "addAction", empty: "Nenhuma ação no plano. Use as sugestões acima ou adicione a primeira.",
       make: () => ({ title: "", priority: "media", owner: "cliente", dep: "", due: "", cost: "", evidence: "", status: "nao_iniciada", next: "", source: "" }),
@@ -263,6 +271,7 @@
     if (f.t === "pct") return '<input type="text" inputmode="decimal" data-field="' + k + '"' + aria + ' style="text-align:right" value="' + esc(pctField(v)) + '">';
     if (f.t === "pctOpt") return '<input type="text" inputmode="decimal" data-field="' + k + '"' + aria + ' style="text-align:right" placeholder="padrão" value="' + esc(v == null ? "" : pctField(v)) + '">';
     if (f.t === "int") return '<input type="number" data-field="' + k + '"' + aria + ' style="text-align:right" value="' + esc(v == null ? "" : v) + '">';
+    if (f.t === "bool") return '<label class="switch-row" style="padding:6px 0"><input type="checkbox" data-field="' + k + '"' + aria + (v ? " checked" : "") + "><span>" + (v ? "Incluído" : "Fora do documento") + "</span></label>";
     if (f.t === "date") return '<input type="date" data-field="' + k + '"' + aria + ' value="' + esc(v || "") + '">';
     return '<input type="text" maxlength="' + (f.max || 160) + '" data-field="' + k + '"' + aria + ' value="' + esc(v) + '" autocomplete="off">';
   }
@@ -271,9 +280,10 @@
   function wireRow(el, cfg, name, row) {
     el.querySelectorAll("[data-field]").forEach((inp) => {
       const f = cfg.fields.find((x) => x.k === inp.dataset.field);
-      inp.addEventListener(inp.tagName === "SELECT" || inp.type === "date" ? "change" : "input", () => {
+      inp.addEventListener(inp.tagName === "SELECT" || inp.type === "date" || inp.type === "checkbox" ? "change" : "input", () => {
         let v = inp.value;
-        if (f.t === "money") v = Engine.parseLocaleNumber(inp.value);
+        if (f.t === "bool") v = inp.checked;
+        else if (f.t === "money") v = Engine.parseLocaleNumber(inp.value);
         else if (f.t === "pct") v = Engine.parseLocaleNumber(inp.value, true);
         else if (f.t === "pctOpt") v = inp.value.trim() === "" ? null : Engine.parseLocaleNumber(inp.value, true);
         else if (f.t === "int") v = Number(inp.value) || 0;
@@ -327,7 +337,7 @@
 
   function renderDisclaimers() {
     const d = Planning.disclaimer(state);
-    const html = '<div class="disclaimer"><b>Aviso.</b> ' + d.lines.map(esc).join(" ") + (d.filled ? "" : '<div class="banner warn no-pdf" style="margin:8px 0 0">Identificação incompleta: preencha em <b>Plano de ação → Profissional e escopo</b>.</div>') + "</div>";
+    const html = '<div class="disclaimer"><b>Aviso.</b> ' + d.lines.map(esc).join(" ") + (d.filled ? "" : '<div class="banner warn no-pdf" style="margin:8px 0 0">Identificação incompleta: preencha em <b>Abertura → Profissional e escopo</b>.</div>') + "</div>";
     document.querySelectorAll(".disclaimer-slot").forEach((el) => { el.innerHTML = html; });
   }
 
@@ -444,19 +454,24 @@
   /* ================= ABA · PLANO DE AÇÃO ================= */
   const PRIO_RANK = { critica: 0, alta: 1, media: 2, baixa: 3 };
   const PRIO_BADGE = { critica: "critical", alta: "warning", media: "neutral", baixa: "neutral" };
+  function openActionsSorted() {
+    return state.actions.filter((a) => a.status !== "concluida").sort((a, b) => (PRIO_RANK[a.priority] - PRIO_RANK[b.priority]) || ((a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : 0) || a.id - b.id);
+  }
+  function top3HTML(emptyMsg) {
+    const sorted = openActionsSorted().slice(0, 3);
+    return sorted.length ? '<div class="top3">' + sorted.map((a, i) => '<div class="t"><div class="n">' + (i + 1) + '</div><div><div class="tt">' + esc(a.title || "(sem título)") + '</div><div class="tm">' + label(L_OWNER, a.owner) + " · " + (a.due ? "prazo " + a.due.split("-").reverse().join("/") : "sem prazo") + " · " + label(L_STATUS, a.status) + (a.next ? " · próximo passo: " + esc(a.next) : "") + '</div></div><span class="badge ' + PRIO_BADGE[a.priority] + '">' + label(L_PRIORITY, a.priority) + "</span></div>").join("") + "</div>" : '<div class="empty-note">' + (emptyMsg || "Nenhuma ação aberta. Adicione ações abaixo ou use as sugestões do sistema.") + "</div>";
+  }
+  function computeSuggestions(c) {
+    c = c || Synthesis.context(state);
+    const tauEst = state.taxRows.length ? taxOf().tau : null;
+    return Planning.suggestions(state, { an: c.an, bs: c.bs, fl: c.fl, rs: c.rs, ind: c.ind, quality: c.q, goals: c.goals, protection: c.prot, succession: c.succ, tauEst, stress: c.crise ? { crise: c.crise } : {} }).filter((x) => !state.actions.some((a) => a.source === x.key));
+  }
   function renderPlan() {
     const t = todayISO(), open = state.actions.filter((a) => a.status !== "concluida");
     const overdue = open.filter((a) => a.due && a.due < t), blocked = open.filter((a) => a.status === "bloqueada"), done = state.actions.filter((a) => a.status === "concluida");
     $("planKpis").innerHTML = tileHTML("Ações abertas", open.length, open.filter((a) => a.status === "em_curso").length + " em curso") + tileHTML("Prazo vencido", overdue.length, "Abertas com prazo anterior a hoje", overdue.length ? "neg" : "") + tileHTML("Bloqueadas", blocked.length, "Dependem de documento, liquidez ou decisão") + tileHTML("Concluídas", done.length, state.actions.length ? Math.round(done.length / state.actions.length * 100) + "% do plano" : "Sem ações cadastradas");
-
-    const sorted = open.slice().sort((a, b) => (PRIO_RANK[a.priority] - PRIO_RANK[b.priority]) || ((a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : 0) || a.id - b.id).slice(0, 3);
-    $("top3").innerHTML = sorted.length ? '<div class="top3">' + sorted.map((a, i) => '<div class="t"><div class="n">' + (i + 1) + '</div><div><div class="tt">' + esc(a.title || "(sem título)") + '</div><div class="tm">' + label(L_OWNER, a.owner) + " · " + (a.due ? "prazo " + a.due.split("-").reverse().join("/") : "sem prazo") + " · " + label(L_STATUS, a.status) + (a.next ? " · próximo passo: " + esc(a.next) : "") + '</div></div><span class="badge ' + PRIO_BADGE[a.priority] + '">' + label(L_PRIORITY, a.priority) + "</span></div>").join("") + "</div>" : '<div class="empty-note">Nenhuma ação aberta. Adicione ações abaixo ou use as sugestões do sistema.</div>';
-
-    const bs = Planning.balanco(state), fl = Planning.fluxo(state, bs), rs = Planning.reserva(state, fl, bs);
-    const v = Engine.validate(state), an = v.errors.length ? null : Engine.analyze(state, 0);
-    const ind = Planning.indicadores(state, bs, fl, rs, an), q = Planning.quality(state);
-    const gl = Goals.analyze(state, fl, bs, new Date(), an), pr = Protection.analyze(state, { fl, bs, goals: gl }), tauEst = state.taxRows.length ? taxOf().tau : null, sc = Succession.analyze(state, { bs });
-    const sug = Planning.suggestions(state, { an, bs, fl, rs, ind, quality: q, goals: gl, protection: pr, succession: sc, tauEst, stress: an ? { crise: Engine.stress(state, state.stress.crise) } : {} }).filter((s) => !state.actions.some((a) => a.source === s.key));
+    $("top3").innerHTML = top3HTML();
+    const sug = computeSuggestions();
     $("suggestBox").innerHTML = sug.length ? '<div class="sug-box">' + sug.map((s) => '<div class="sug"><div><div class="st">' + esc(s.title) + ' <span class="badge ' + PRIO_BADGE[s.priority] + '">' + label(L_PRIORITY, s.priority) + '</span></div><div class="se">' + esc(s.evidence) + '</div><div class="sn">Próximo passo: ' + esc(s.next) + '</div></div><button class="btn ghost" type="button" data-sug="' + s.key + '">Adicionar ao plano</button></div>').join("") + "</div>" : '<div class="empty-note">Nenhuma sugestão pendente: os indicadores atuais não apontam novas ações, ou as sugestões já foram adicionadas.</div>';
     $("suggestBox").querySelectorAll("[data-sug]").forEach((btn) => btn.addEventListener("click", () => {
       const s = sug.find((x) => x.key === btn.dataset.sug); if (!s) return;
@@ -1235,36 +1250,207 @@
     });
   }
 
+  /* ================= etapas da reunião ================= */
+  const STAGES = [
+    { id: "open", name: "Abertura", panes: ["open"], ask: "Quem é o cliente, o que ele espera da reunião e o que já trouxe?" },
+    { id: "diag", name: "Diagnóstico", panes: ["diag"], ask: "Qual é a situação de hoje: patrimônio, fluxo, reserva, dívidas e qualidade dos dados?" },
+    { id: "obj", name: "Objetivos", panes: ["obj"], ask: "O que o cliente quer realizar, até quando e em que ordem de importância?" },
+    { id: "ana", name: "Análises", panes: ["cx", "prot", "apos", "succ"], ask: "Os recursos dão conta dos objetivos? Como proteger a família e o patrimônio?" },
+    { id: "tax", name: "Tributação", panes: ["irm", "ira", "pgbl"], optional: true, ask: "Há eficiência tributária a avaliar com o contador? (etapa opcional)" },
+    { id: "syn", name: "Síntese e plano", panes: ["syn", "plan"], ask: "O que priorizar? Quem faz o quê, e até quando?" },
+    { id: "ips", name: "Compromisso", panes: ["ips"], ask: "O cliente assume estes compromissos? Registre o aceite e gere o documento." }
+  ];
+  const PANE_LABEL = { open: "Abertura", diag: "Diagnóstico", obj: "Objetivos", cx: "Caixa e dívidas", prot: "Proteção", apos: "Aposentadoria", succ: "Sucessão", irm: "IRPF mensal", ira: "IRPF anual e PGBL", pgbl: "PGBL no longo prazo", syn: "Diagnóstico final", plan: "Plano de ação", ips: "Compromisso (IPS)", ver: "Versões" };
+  const FLOW = STAGES.flatMap((x) => x.panes), TABS = FLOW.concat(["ver"]);
+  const stageOf = (t) => { const x = STAGES.find((y) => y.panes.includes(t)); return x ? x.id : null; };
+  const stageLast = {};
+  const seenList = () => Object.keys(state.meeting.seen).filter((k) => state.meeting.seen[k]);
+  const taxSeen = () => ["irm", "ira", "pgbl"].some((k) => state.meeting.seen[k]);
+  const fdate = (iso) => (iso ? String(iso).split("-").reverse().join("/") : "—");
+
+  function renderStages() {
+    const st = Synthesis.stages(state, seenList()), m = {};
+    st.list.forEach((x) => { m[x.id] = x; });
+    document.querySelectorAll(".stage[data-stage]").forEach((b) => { const x = m[b.dataset.stage]; b.classList.toggle("done", !!(x && x.done)); b.classList.toggle("optional", !!(x && x.optional)); });
+  }
+  const OPT_PANES = (STAGES.find((x) => x.optional) || { panes: [] }).panes;
+  // Fora da etapa opcional, o "próximo" e o "anterior" a pulam; um botão extra oferece entrar nela.
+  function navTargets(t) {
+    const inOpt = OPT_PANES.includes(t), flow = inOpt ? FLOW : FLOW.filter((x) => !OPT_PANES.includes(x)), i = flow.indexOf(t), fi = FLOW.indexOf(t);
+    return { prev: i > 0 ? flow[i - 1] : null, next: i >= 0 && i < flow.length - 1 ? flow[i + 1] : null, opt: !inOpt && i >= 0 && i < flow.length - 1 && FLOW[fi + 1] !== flow[i + 1] ? FLOW[fi + 1] : null };
+  }
+  function renderStepNav() {
+    const box = document.querySelector("#pane-" + active + " .stepnav"); if (!box) return;
+    const g = STAGES.find((x) => x.id === stageOf(active)); if (!g) { box.innerHTML = ""; return; }
+    const nv = navTargets(active);
+    box.innerHTML = (nv.prev ? '<button class="btn ghost" type="button" data-go="' + nv.prev + '">← ' + esc(PANE_LABEL[nv.prev]) + "</button>" : "<span></span>") +
+      '<span class="hint">Etapa ' + (STAGES.indexOf(g) + 1) + " de " + STAGES.length + " · " + esc(g.name) + (g.panes.length > 1 ? " (" + (g.panes.indexOf(active) + 1) + "/" + g.panes.length + ")" : "") + "</span>" +
+      '<span class="nxt">' + (nv.opt ? '<button class="btn ghost" type="button" data-go="' + nv.opt + '">Tributação (opcional)</button>' : "") + (nv.next ? '<button class="btn" type="button" data-go="' + nv.next + '">' + esc(PANE_LABEL[nv.next]) + " →</button>" : "") + "</span>";
+  }
+
+  /* ---------- Abertura: roteiro ---------- */
+  function renderOpen() {
+    const st = Synthesis.stages(state, seenList()), byId = {};
+    st.list.forEach((x) => { byId[x.id] = x; });
+    $("roadmap").innerHTML = '<div class="road">' + STAGES.map((g, i) => {
+      const x = byId[g.id], cls = x.done ? " done" : st.next === g.id ? " next" : "";
+      const chip = x.done ? '<span class="badge good">Concluída</span>' : st.next === g.id ? '<span class="badge warning">Próxima</span>' : g.optional ? '<span class="badge neutral">Opcional</span>' : "";
+      return '<div class="road-item' + cls + '"><div class="n">' + (x.done ? "✓" : i + 1) + '</div><div><div class="t">' + esc(g.name) + " " + chip + '</div><div class="q">' + esc(g.ask) + '</div></div><button class="btn-small no-pdf" type="button" data-go="' + (stageLast[g.id] || g.panes[0]) + '">' + (x.done ? "Revisar" : "Abrir") + "</button></div>";
+    }).join("") + "</div>";
+  }
+
+  /* ---------- Diagnóstico final ---------- */
+  const AREA_BADGE = { ok: ["good", "Em ordem"], warn: ["warning", "Atenção"], crit: ["critical", "Prioridade"], info: ["neutral", "Informativo"], na: ["neutral", "Sem dado"] };
+  function renderSyn() {
+    const c = Synthesis.context(state), list = Synthesis.areas(c, { taxVisited: taxSeen() }), sm = Synthesis.summary(list), ex = Synthesis.executive(c, list);
+    $("synSummary").innerHTML = '<div class="sum-lines">' + ex.map((l) => "<p>" + esc(l) + "</p>").join("") + "</div>" +
+      '<div class="sum-chips">' + (sm.counts.crit ? '<span class="badge critical">' + sm.counts.crit + " prioridade" + (sm.counts.crit > 1 ? "s" : "") + "</span>" : "") + (sm.counts.warn ? '<span class="badge warning">' + sm.counts.warn + " em atenção</span>" : "") + '<span class="badge good">' + sm.counts.ok + " em ordem</span>" + (sm.counts.na ? '<span class="badge neutral">' + sm.counts.na + " sem dado</span>" : "") + "</div>";
+    $("synAreas").innerHTML = '<div class="area-wrap"><table class="area-table"><thead><tr><th>Área</th><th>Situação</th><th>Leitura</th><th class="no-pdf"></th></tr></thead><tbody>' + list.map((a) => {
+      const b = AREA_BADGE[a.status] || AREA_BADGE.na;
+      return '<tr><td class="a">' + esc(a.label) + '</td><td class="s"><span class="badge ' + b[0] + '">' + b[1] + '</span></td><td><div class="hd">' + esc(a.headline) + "</div>" + (a.detail ? '<div class="dt">' + esc(a.detail) + "</div>" : "") + '</td><td class="go no-pdf"><button class="btn-small" type="button" data-go="' + a.tab + '">' + esc(a.tabLabel) + "</button></td></tr>";
+    }).join("") + "</tbody></table></div>";
+    const open = openActionsSorted();
+    if (open.length) $("synTop3").innerHTML = top3HTML();
+    else {
+      const sug = computeSuggestions(c).slice(0, 3);
+      $("synTop3").innerHTML = (sug.length ? '<div class="empty-note" style="padding-top:0">O plano de ação ainda está vazio. Estas são as prioridades apontadas pelos números; transforme-as em ações na etapa seguinte.</div><div class="top3">' + sug.map((x, i) => '<div class="t"><div class="n">' + (i + 1) + '</div><div><div class="tt">' + esc(x.title) + '</div><div class="tm">' + esc(x.evidence) + '</div></div><span class="badge ' + PRIO_BADGE[x.priority] + '">' + label(L_PRIORITY, x.priority) + "</span></div>").join("") + "</div>" : '<div class="empty-note">Sem prioridades apontadas pelos números. Registre as decisões da reunião no plano de ação.</div>') +
+        '<div class="actions no-pdf" style="margin-top:12px"><button class="btn" type="button" data-go="plan">Montar o plano de ação</button></div>';
+    }
+  }
+
+  /* ---------- Compromisso (IPS) ---------- */
+  const FREQ_TXT = { mensal: " por mês", anual: " por ano", unico: "", na: "" };
+  const commitValue = (x) => (x.freq === "na" || !(x.value > 0) ? "—" : money(x.value) + (FREQ_TXT[x.freq] || ""));
+  const TOL_TXT = { conservadora: "conservadora (prefere previsibilidade)", moderada: "moderada (aceita oscilar um pouco)", arrojada: "arrojada (aceita oscilar bastante)" };
+  const kv = (k, v, pre) => "<dt>" + esc(k) + "</dt><dd" + (pre ? ' style="white-space:pre-wrap"' : "") + ">" + esc(v) + "</dd>";
+  function ipsDocHTML(m, altered) {
+    const id = m.identification, inv = m.investment, ac = m.acceptance;
+    const stamp = ac.status === "aceito" ? '<span class="stamp ok">Aceito em ' + fdate(ac.acceptedOn) + "</span>" + (altered ? '<span class="stamp draft">com alterações posteriores</span>' : "") : '<span class="stamp draft">Rascunho: ainda não aceito</span>';
+    let h = '<div class="ips-doc"><div class="ips-title"><div class="kicker">Declaração de política de planejamento</div><h3>Compromisso de planejamento financeiro ' + stamp + "</h3></div>";
+    h += "<h4>1. Identificação</h4><dl class=\"kv\">" + kv("Cliente", id.client || "—") + kv("Planejador", id.planner ? id.planner + (id.cert ? " · " + id.cert : "") : "—") +
+      kv("Autorização de consultor (CVM)", id.cvm === "sim" ? "Possui" + (id.cvmNo ? " · " + id.cvmNo : "") : "Não possui; este documento não recomenda valores mobiliários") + kv("Data", fdate(id.date)) + kv("Revisão do plano", "a cada " + id.reviewMonths + " meses; próxima em " + fdate(id.nextReview)) + "</dl>";
+    h += '<h4>2. Situação na data</h4><dl class="kv">' + m.situation.map((x) => kv(x.label, x.value)).join("") + "</dl>";
+    h += "<h4>3. Objetivos do cliente</h4>" + (m.objectives.length ? "<ul>" + m.objectives.map((o) => "<li><b>" + esc(o.label) + ".</b> " + esc(o.detail) + "</li>").join("") + "</ul>" : "<p>Nenhum objetivo cadastrado.</p>");
+    h += "<h4>4. Premissas do plano</h4><ul>" + m.assumptions.map((a) => "<li>" + esc(a) + "</li>").join("") + "</ul>";
+    h += "<h4>5. Compromissos assumidos</h4>" + (m.commitments.length ? '<table><thead><tr><th>#</th><th>Compromisso</th><th>Valor</th><th>Prazo</th><th>Responsável</th></tr></thead><tbody>' + m.commitments.map((x, i) => "<tr><td>" + (i + 1) + "</td><td>" + esc(x.text) + '</td><td class="r">' + esc(commitValue(x)) + '</td><td class="r">' + esc(fdate(x.due)) + "</td><td>" + esc(label(L_OWNER, x.owner)) + "</td></tr>").join("") + "</tbody></table>" : "<p>Nenhum compromisso incluído.</p>");
+    h += "<h4>6. Regras de decisão e revisão</h4><table><thead><tr><th>Regra</th><th>Critério</th><th>Hoje</th></tr></thead><tbody>" + m.rules.map((r) => "<tr><td><b>" + esc(r.label) + "</b></td><td>" + esc(r.rule) + "</td><td>" + (r.current ? esc(r.current) : "") + (r.status === "ok" ? ' <span class="badge good">dentro</span>' : r.status === "crit" ? ' <span class="badge critical">fora</span>' : "") + "</td></tr>").join("") + "</tbody></table>";
+    h += '<h4>7. Responsabilidades</h4><div class="two"><div><b>Do cliente</b><ul>' + m.responsibilities.client.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul></div><div><b>Do planejador</b><ul>" + m.responsibilities.planner.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul></div></div>";
+    h += '<h4>8. Escopo, remuneração e conflitos de interesse</h4><dl class="kv">' + kv("Escopo do serviço", m.scope.scope || "[preencher na Abertura]", true) + kv("Remuneração", m.scope.fee || "[preencher na Abertura]", true) + kv("Conflitos de interesse", m.scope.conflicts || "[preencher na Abertura]", true) + "</dl>";
+    h += "<h4>9. Investimentos</h4>";
+    if (inv.mode === "autorizado") {
+      h += "<p>Diretrizes de responsabilidade do consultor autorizado" + (inv.profileDate ? "; perfil de investidor de " + fdate(inv.profileDate) : "") + ".</p><p style=\"white-space:pre-wrap\">" + esc(inv.policy || "[diretrizes não preenchidas]") + "</p>";
+      if (inv.tolerance || inv.drawdown) h += "<p>Percepção de risco declarada: " + esc(TOL_TXT[inv.tolerance] || "não informada") + "; queda suportada sem mudar o plano: " + pct1(inv.drawdown) + ".</p>";
+    } else {
+      h += "<p>Este documento <b>não define alocação de ativos nem recomenda valores mobiliários</b>: o planejador não possui autorização de consultor da CVM. A escolha dos investimentos cabe ao cliente, com profissional habilitado. As necessidades e restrições abaixo orientam essa escolha:</p><ul>" + inv.needs.map((n) => "<li><b>" + esc(n.label) + ":</b> " + esc(n.detail) + "</li>").join("") + "</ul>";
+      h += "<p>Percepção de risco declarada pelo cliente: " + esc(TOL_TXT[inv.tolerance] || "não informada") + "; queda do patrimônio financeiro que suportaria sem mudar o plano: " + pct1(inv.drawdown) + ".</p>";
+    }
+    if (state.ips.notes) h += "<h4>10. Observações</h4><p style=\"white-space:pre-wrap\">" + esc(state.ips.notes) + "</p>";
+    h += '<div class="keep"><h4>' + (state.ips.notes ? "11" : "10") + ". Aviso</h4><p style=\"font-size:11.5px;color:var(--ink-secondary)\">" + m.disclaimer.lines.map(esc).join(" ") + "</p>";
+    h += '<div class="sign"><div>' + esc(id.client || "Cliente") + "<br>Cliente · data: ____/____/________</div><div>" + esc(id.planner || "Planejador") + "<br>Planejador · data: ____/____/________</div></div></div>";
+    if (ac.status === "aceito") h += '<p style="margin-top:14px;font-size:11.5px;color:var(--ink-muted)">Aceite registrado na ferramenta em ' + fdate(ac.acceptedOn) + ". Os valores acima correspondem ao plano nessa data.</p>";
+    return h + "</div>";
+  }
+  function acceptedVersion() { return state.ips.acceptedVersion ? state.versions.find((v) => v.id === state.ips.acceptedVersion) || null : null; }
+
+  function acceptIps() {
+    const toast = $("ipsToast");
+    if (state.versions.length >= Engine.MAX_VERSIONS) { const i = state.versions.findIndex((x) => x.auto); if (i >= 0) state.versions.splice(i, 1); }
+    if (state.versions.length >= Engine.MAX_VERSIONS) { toast.textContent = "Limite de " + Engine.MAX_VERSIONS + " versões: exclua uma na aba Versões antes de registrar o aceite."; return; }
+    const iso = todayISO(), nextId = state.versions.reduce((mx, v) => Math.max(mx, v.id || 0), 0) + 1;
+    state.ips.status = "aceito"; state.ips.acceptedOn = iso; state.ips.acceptedVersion = nextId;
+    state.versions.push(Versions.make(state, "Compromisso aceito em " + fdate(iso), "Fotografia do plano no momento do aceite do IPS", new Date().toISOString(), false));
+    saveNow(); renderAll();
+    $("ipsToast").textContent = "Aceite registrado e versão guardada. Salve o PDF e um backup em arquivo.";
+  }
+  function reopenIps() { state.ips.status = "rascunho"; state.ips.acceptedOn = ""; saveNow(); renderAll(); $("ipsToast").textContent = "Documento reaberto como rascunho. A versão aceita continua guardada em Versões."; }
+
+  function suggestCommitments(refresh) {
+    const c = Synthesis.context(state), list = Synthesis.commitments(c, { taxVisited: taxSeen() });
+    let added = 0, updated = 0;
+    list.forEach((x) => {
+      const cur = state.commitments.find((y) => y.source === x.source);
+      if (!cur) { state.commitments.push(Object.assign({ id: rowSeq++ }, x)); added++; }
+      else if (refresh && (cur.text !== x.text || cur.value !== x.value)) { cur.text = x.text; cur.value = x.value; updated++; }
+    });
+    renderCards("commitments"); renderAll(); scheduleSave();
+    $("commitToast").textContent = refresh ? (updated ? updated + " compromisso(s) atualizado(s) com os números atuais." : "Os valores já estão atualizados.") : (added ? added + " compromisso(s) sugerido(s). Marque os que o cliente decidiu assumir." : "Nenhum compromisso novo: o plano atual já está coberto.");
+  }
+
+  function renderIps() {
+    const c = Synthesis.context(state), m = Synthesis.ipsModel(c, { taxVisited: taxSeen() }), av = acceptedVersion();
+    const ch = av ? Versions.changes(av.state, state).filter((x) => x.group !== "Compromissos") : [], chC = av ? Versions.changes(av.state, state).filter((x) => x.group === "Compromissos") : [];
+    const altered = !!av && (ch.length > 0 || chC.length > 0);
+    $("ipsWarnings").innerHTML = m.warnings.length ? '<div class="banner warn"><b>Antes de apresentar o documento:</b><ul>' + m.warnings.map((w) => "<li>" + esc(w) + "</li>").join("") + "</ul></div>" : '<div class="banner ok"><b>Sem pendências.</b> O documento está completo com os dados atuais.</div>';
+    $("ipsReserveHint").textContent = "Meses de despesas essenciais. Em branco: usa o valor calculado no Diagnóstico (" + fmtD(c.rs.months, 1) + " meses).";
+    $("ipsInvestForm").style.display = state.pro.cvm === "sim" ? "" : "none";
+    $("ipsDoc").innerHTML = ipsDocHTML(m, altered);
+    let a = "";
+    if (state.ips.status === "aceito") {
+      a += '<div class="banner ok" style="margin-bottom:10px"><b>Aceito em ' + fdate(state.ips.acceptedOn) + ".</b> " + (av ? "Versão guardada: “" + esc(av.name) + "”." : "A versão guardada no aceite não está mais na lista.") + "</div>";
+      if (altered) a += '<div class="banner warn"><b>Há alterações desde o aceite (' + (ch.length + chC.length) + "):</b><ul>" + ch.concat(chC).slice(0, 8).map((x) => "<li>" + esc(x.label) + (x.fmt === "text" && x.a == null && x.b == null ? "" : ": " + esc(fmtVal(x.fmt, x.a)) + " → " + esc(fmtVal(x.fmt, x.b))) + "</li>").join("") + (ch.length + chC.length > 8 ? "<li>… e mais " + (ch.length + chC.length - 8) + " (compare em Versões)</li>" : "") + "</ul>Se o cliente concordou com as mudanças, registre um novo aceite.</div>";
+      a += '<div class="actions"><button class="btn" id="btnIpsRenew" type="button">Registrar novo aceite</button><button class="btn ghost" id="btnIpsReopen" type="button">Reabrir para edição</button><button class="btn ghost" id="btnIpsBackup" type="button"' + (downloadsNS ? "" : " hidden") + '>Salvar backup (.json)</button><span class="toast" id="ipsToast"></span></div>';
+    } else {
+      const blocked = !state.client.name || !m.commitments.length;
+      a += '<div class="card-hint" style="padding:0 0 10px">O aceite guarda uma fotografia completa do plano em <b>Versões</b>, para comparar nas revisões. Registre-o só depois de o cliente ler o documento acima e concordar.</div>';
+      a += '<div class="actions"><button class="btn" id="btnIpsAccept" type="button"' + (blocked ? " disabled" : "") + '>Registrar aceite do cliente</button><span class="toast" id="ipsToast">' + (blocked ? "Informe o nome do cliente e inclua ao menos um compromisso." : "") + "</span></div>";
+    }
+    $("ipsAccept").innerHTML = a;
+    const arm = (id, lbl, fn) => { const b = $(id); if (b) armed(b, lbl, fn); };
+    arm("btnIpsAccept", "Clique de novo: registrar o aceite", acceptIps);
+    arm("btnIpsRenew", "Clique de novo: registrar novo aceite", acceptIps);
+    arm("btnIpsReopen", "Clique de novo: reabrir como rascunho", reopenIps);
+    const bk = $("btnIpsBackup"); if (bk) bk.addEventListener("click", exportBackup);
+  }
+
   /* ================= abas, render global e tema ================= */
-  const TABS = ["diag", "obj", "cx", "prot", "succ", "apos", "irm", "ira", "pgbl", "plan", "ver"];
-  let active = "apos";
+  let active = "open";
   try { const t = localStorage.getItem(TABKEY); if (TABS.includes(t)) active = t; } catch (e) { /* ignore */ }
-  const RENDER = { diag: renderDiag, obj: renderObj, cx: renderCx, prot: renderProt, succ: renderSucc, apos: renderApos, irm: renderIrm, ira: renderIra, pgbl: renderPgbl, plan: renderPlan, ver: renderVer };
+  const RENDER = { open: renderOpen, diag: renderDiag, obj: renderObj, cx: renderCx, prot: renderProt, succ: renderSucc, apos: renderApos, irm: renderIrm, ira: renderIra, pgbl: renderPgbl, syn: renderSyn, plan: renderPlan, ips: renderIps, ver: renderVer };
   function renderAll() {
     document.querySelectorAll("[data-client-line]").forEach((el) => { el.textContent = state.client.name ? "Cliente: " + state.client.name : "Cenário sem nome de cliente"; });
     $("whoLine").textContent = state.client.name || "";
     const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
     document.querySelectorAll("[data-today]").forEach((el) => { el.textContent = today; });
     RENDER[active]();
-    renderDisclaimers(); renderDataSafety();
+    renderStages(); renderStepNav(); renderDisclaimers(); renderDataSafety();
     const bk = $("backupExport").closest("details"); if (bk && bk.open) $("backupExport").value = JSON.stringify(state, null, 2);
   }
+  function markSeen(t) { if (state.meeting.seen[t] === false) { state.meeting.seen[t] = true; scheduleSave(); } }
+  function syncBarHeight() { const h = $("appbar").offsetHeight; if (h) document.documentElement.style.setProperty("--topbar", h + "px"); }
   function setTab(t) {
-    active = t;
+    if (!TABS.includes(t)) return;
+    active = t; markSeen(t);
+    const sid = stageOf(t), g = STAGES.find((x) => x.id === sid), multi = !!g && g.panes.length > 1;
+    if (sid) stageLast[sid] = t;
+    document.querySelectorAll(".stage").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.stage ? b.dataset.stage === sid : b.dataset.tab === t)));
     document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    $("substrip").classList.toggle("on", multi);
+    document.querySelectorAll(".sub-group").forEach((gr) => gr.classList.toggle("on", multi && gr.dataset.stage === sid));
     document.querySelectorAll(".pane").forEach((pn) => pn.classList.toggle("active", pn.id === "pane-" + t));
+    syncBarHeight();
+    const cur = document.querySelector('#stages .stage[aria-selected="true"]'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
     try { localStorage.setItem(TABKEY, t); } catch (e) { /* ignore */ }
-    const sel = document.querySelector('.tab[data-tab="' + t + '"]'), box = $("tabs");
-    if (sel && box) box.scrollLeft = Math.max(0, sel.offsetLeft - (box.clientWidth - sel.offsetWidth) / 2);
+    const pane = $("pane-" + t); if (pane) { const sc = pane.querySelector(".canvas") || pane; sc.scrollTop = 0; }
     renderAll();
   }
+  const stageTarget = (b) => (b.dataset.stage ? stageLast[b.dataset.stage] || STAGES.find((x) => x.id === b.dataset.stage).panes[0] : b.dataset.tab);
+  document.querySelectorAll(".stage").forEach((b) => {
+    b.title = b.dataset.stage ? STAGES.find((x) => x.id === b.dataset.stage).ask : "Fotografias do plano e comparação entre versões";
+    b.addEventListener("click", () => setTab(stageTarget(b)));
+    b.addEventListener("keydown", (e) => {
+      const all = [...document.querySelectorAll(".stage")], i = all.indexOf(b);
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const n = all[(i + (e.key === "ArrowRight" ? 1 : all.length - 1)) % all.length]; n.focus(); setTab(stageTarget(n)); }
+    });
+  });
   document.querySelectorAll(".tab").forEach((b) => {
     b.addEventListener("click", () => setTab(b.dataset.tab));
     b.addEventListener("keydown", (e) => {
-      const tabs = [...document.querySelectorAll(".tab")], i = tabs.indexOf(b);
+      const tabs = [...b.parentElement.querySelectorAll(".tab")], i = tabs.indexOf(b);
       if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const n = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length]; n.focus(); setTab(n.dataset.tab); }
     });
   });
+  document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-go]"); if (b && TABS.includes(b.dataset.go)) setTab(b.dataset.go); });
+  window.addEventListener("resize", syncBarHeight);
   $("scenarioPick").addEventListener("change", renderAll);
   let themeTimer = null;
   const rerenderTheme = () => { clearTimeout(themeTimer); themeTimer = setTimeout(renderAll, 80); };
@@ -1272,11 +1458,13 @@
   if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerenderTheme);
 
   /* ================= backup, privacidade e arquivos ================= */
+  const PDF_SHEETS = { btnPdfDiag: ["sheetDiag", "asset-planning-diagnostico.pdf"], btnPdfPlan: ["sheetPlan", "asset-planning-plano-de-acao.pdf"], btnPdfApos: ["sheetApos", "asset-planning-aposentadoria.pdf"], btnPdfIrm: ["sheetIrm", "asset-planning-irpf-mensal.pdf"], btnPdfIra: ["sheetIra", "asset-planning-irpf-anual-pgbl.pdf"], btnPdfPgbl: ["sheetPgbl", "asset-planning-pgbl-longo-prazo.pdf"], btnPdfObj: ["sheetObj", "asset-planning-objetivos.pdf"], btnPdfCx: ["sheetCx", "asset-planning-caixa-e-dividas.pdf"], btnPdfProt: ["sheetProt", "asset-planning-protecao.pdf"], btnPdfSucc: ["sheetSucc", "asset-planning-sucessao.pdf"], btnPdfVer: ["sheetVer", "asset-planning-versoes.pdf"], btnPdfSyn: ["sheetSyn", "asset-planning-diagnostico-final.pdf"], btnPdfIps: ["sheetIps", "asset-planning-ips-compromisso.pdf"] };
   let downloadsNS = null;
   function updateDownloadUI() {
     const has = !!downloadsNS, pdfOk = has && typeof window.html2pdf === "function";
-    $("btnExportFile").hidden = !has;
-    ["btnPdfDiag", "btnPdfApos", "btnPdfIrm", "btnPdfIra", "btnPdfPgbl", "btnPdfPlan", "btnPdfObj", "btnPdfCx", "btnPdfProt", "btnPdfSucc", "btnPdfVer"].forEach((id) => { $(id).hidden = !pdfOk; });
+    $("btnExportFile").hidden = !has; $("btnBackupOpen").hidden = !has;
+    const ib = $("btnIpsBackup"); if (ib) ib.hidden = !has;
+    Object.keys(PDF_SHEETS).forEach((id) => { $(id).hidden = !pdfOk; });
   }
   // Fora do claude.ai (arquivo aberto no navegador, site próprio): o salvamento vira um download comum.
   function anchorSave(opts) {
@@ -1334,10 +1522,12 @@
 
   function dlError(e) { say(e && e.code === "declined" ? "Salvamento cancelado." : "Não foi possível salvar o arquivo neste ambiente."); }
 
-  $("btnExportFile").addEventListener("click", async () => {
+  async function exportBackup() {
     if (!downloadsNS) return;
     try { await downloadsNS.save({ filename: "asset-planning-backup.json", data: JSON.stringify(state, null, 2) }); markBackup(); say("Backup salvo."); } catch (e) { dlError(e); }
-  });
+  }
+  $("btnExportFile").addEventListener("click", exportBackup);
+  $("btnBackupOpen").addEventListener("click", exportBackup);
 
   // PDF: campos de formulário viram texto que quebra linha (input/textarea cortam texto longo); "Como ler" aberto
   function flattenForPdf(root) {
@@ -1358,12 +1548,11 @@
     });
   }
 
-  const PDF_SHEETS = { btnPdfDiag: ["sheetDiag", "asset-planning-diagnostico.pdf"], btnPdfPlan: ["sheetPlan", "asset-planning-plano-de-acao.pdf"], btnPdfApos: ["sheetApos", "asset-planning-aposentadoria.pdf"], btnPdfIrm: ["sheetIrm", "asset-planning-irpf-mensal.pdf"], btnPdfIra: ["sheetIra", "asset-planning-irpf-anual-pgbl.pdf"], btnPdfPgbl: ["sheetPgbl", "asset-planning-pgbl-longo-prazo.pdf"], btnPdfObj: ["sheetObj", "asset-planning-objetivos.pdf"], btnPdfCx: ["sheetCx", "asset-planning-caixa-e-dividas.pdf"], btnPdfProt: ["sheetProt", "asset-planning-protecao.pdf"], btnPdfSucc: ["sheetSucc", "asset-planning-sucessao.pdf"], btnPdfVer: ["sheetVer", "asset-planning-versoes.pdf"] };
   Object.keys(PDF_SHEETS).forEach((id) => {
     $(id).addEventListener("click", async () => {
       if (!downloadsNS || typeof window.html2pdf !== "function") return;
       const btn = $(id), el = $(PDF_SHEETS[id][0]), root = document.documentElement, prev = root.getAttribute("data-theme");
-      const prevStyle = el.getAttribute("style");
+      const prevStyle = el.getAttribute("style"), idleTxt = btn.textContent;
       btn.disabled = true; btn.textContent = "Gerando PDF…";
       root.setAttribute("data-theme", "light"); document.body.classList.add("pdf-mode");
       el.style.width = "732px"; el.style.maxWidth = "732px";  // margens laterais de 8,05 mm = 732,9 px: largura do canvas = 733 = clientWidth, sem deriva nas quebras de página
@@ -1380,7 +1569,7 @@
         document.body.classList.remove("pdf-mode");
         if (prevStyle === null) el.removeAttribute("style"); else el.setAttribute("style", prevStyle);
         document.querySelectorAll(".html2pdf__overlay").forEach((n) => n.remove());
-        btn.disabled = false; btn.textContent = "Salvar relatório (PDF)";
+        btn.disabled = false; btn.textContent = idleTxt;
         renderAll();
       }
     });
@@ -1393,19 +1582,21 @@
       clearTimeout(timer); timer = null; btn.textContent = idle; action();
     });
   }
-  function applyState(s) {
+  function applyState(s, toOpen) {
     state = s; recomputeRowSeq(); verSel = { a: null, b: "cur" };
-    fillAll(); Object.keys(ROW_UI).forEach(renderRows); Object.keys(CARD_UI).forEach(renderCards); renderAll(); saveNow();
+    fillAll(); Object.keys(ROW_UI).forEach(renderRows); Object.keys(CARD_UI).forEach(renderCards);
+    if (toOpen) setTab("open"); else { markSeen(active); renderAll(); }
+    saveNow();
   }
   $("btnImport").addEventListener("click", () => {
     const txt = $("backupImport").value.trim(); if (!txt) return;
-    try { const parsed = JSON.parse(txt); if (!parsed || typeof parsed !== "object") throw new Error("formato"); applyState(Engine.normalizeState(parsed)); $("backupImport").value = ""; say("Backup restaurado e validado."); }
+    try { const parsed = JSON.parse(txt); if (!parsed || typeof parsed !== "object") throw new Error("formato"); applyState(Engine.normalizeState(parsed), true); $("backupImport").value = ""; say("Backup restaurado e validado."); }
     catch (e) { say("Não foi possível ler este backup: o texto está incompleto ou não é um JSON válido."); }
   });
-  armed($("btnReset"), "Clique de novo: substituir pelo exemplo", () => applyState(Engine.normalizeState(null)));
+  armed($("btnReset"), "Clique de novo: substituir pelo exemplo", () => applyState(Engine.normalizeState(null), true));
   armed($("btnWipe"), "Clique de novo: apagar tudo", () => {
     try { localStorage.removeItem(KEY); localStorage.removeItem(LEGACY); localStorage.removeItem(TABKEY); } catch (e) { /* ignore */ }
-    applyState(Engine.normalizeState(null)); try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+    applyState(Engine.normalizeState(null), true); try { localStorage.removeItem(KEY); localStorage.removeItem(TABKEY); } catch (e) { /* ignore */ }
     say("Dados apagados deste navegador. O exemplo padrão está carregado na tela (não salvo).");
   });
 
@@ -1432,9 +1623,10 @@
     renderCards("taxRows"); renderAll(); scheduleSave(); say(state.taxRows.length ? "Linhas criadas por palavras-chave do nome: revise tipo, % de ganho e anos." : "Nenhum ativo de aposentadoria no Diagnóstico.");
   });
   { const bk = $("backupExport").closest("details"); if (bk) bk.addEventListener("toggle", () => { if (bk.open) $("backupExport").value = JSON.stringify(state, null, 2); }); }
+  $("suggestCommit").addEventListener("click", () => suggestCommitments(false));
+  armed($("refreshCommit"), "Clique de novo: atualizar valores", () => suggestCommitments(true));
+  FLOW.forEach((t) => { const sh = document.querySelector("#pane-" + t + " .sheet"); if (sh) { const nav = document.createElement("div"); nav.className = "stepnav no-pdf"; sh.appendChild(nav); } });
   fillAll(); wireFields(); Object.keys(ROW_UI).forEach(renderRows); Object.keys(CARD_UI).forEach(renderCards);
-  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === active)));
-  document.querySelectorAll(".pane").forEach((pn) => pn.classList.toggle("active", pn.id === "pane-" + active));
-  renderAll(); saveNow();
+  setTab(active); saveNow();
 })();
 /* APP:END */

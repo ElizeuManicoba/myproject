@@ -1,10 +1,11 @@
 const { chromium } = require('playwright');
+const { go } = require('./nav.js');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport: { width: 1400, height: 1000 }, colorScheme: process.argv[2] || 'light' })).newPage();
   const errs = []; page.on('pageerror', e => errs.push(e.message));
   await page.goto('file://' + require('path').join(__dirname, '..', '..', 'dist', 'asset-planning.local.html')); await page.waitForTimeout(800);
-  await page.click('.tab[data-tab="apos"]'); await page.waitForTimeout(400);
+  await go(page, 'apos', 400);
   // ativa exemplo de fases e preenche IR
   await page.click('#addPhaseEx'); await page.click('#addPhaseEx'); await page.waitForTimeout(300);
   await page.click('#fillTax'); await page.click('#fillTax'); await page.waitForTimeout(300);

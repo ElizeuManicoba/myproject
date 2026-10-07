@@ -1,8 +1,9 @@
 // Site do GitHub Pages (docs/) servido num subcaminho, como em https://usuario.github.io/repositorio/:
+const { go } = require('./nav.js');
 // CSP, nenhum pedido externo, fontes locais, service worker, uso sem internet, instalação, backup e PDF.
 const { chromium, devices } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..', '..', 'docs'), BASE = '/myproject/';
+const ROOT = path.join(__dirname, '..', '..', '..', 'docs'), BASE = '/myproject/';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain' };
 let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', n, x === undefined ? '' : x); } else console.log('ok  ', n, x === undefined ? '' : x); };
 (async () => {
@@ -43,14 +44,14 @@ let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', 
   ok('service worker ativo e controlando a página', await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return !!r && !!r.active && !!navigator.serviceWorker.controller; }));
   ok('cache do app preenchido (13 arquivos)', await page.evaluate(async () => { const k = (await caches.keys()).filter((x) => x.startsWith('asset-planning-')); if (k.length !== 1) return false; return (await (await caches.open(k[0])).keys()).length >= 13; }));
   // dados e uso sem internet
-  await page.click('.tab[data-tab="apos"]'); await page.waitForTimeout(400);
-  await page.fill('[data-path="client.name"]', 'Cliente Pages'); await page.waitForTimeout(500);
+  await go(page, 'apos', 400);
+  await page.fill('[data-path="client.name"]:visible', 'Cliente Pages'); await page.waitForTimeout(500);
   await ctx.setOffline(true);
   await page.reload(); await page.waitForTimeout(1500);
-  ok('sem internet: o app recarrega do cache e mantém os dados', await page.isVisible('.topbar') && (await page.inputValue('[data-path="client.name"]')) === 'Cliente Pages');
-  await page.click('.tab[data-tab="succ"]'); await page.waitForTimeout(500);
+  ok('sem internet: o app recarrega do cache e mantém os dados', await page.isVisible('.topbar') && (await page.inputValue('[data-path="client.name"]:visible')) === 'Cliente Pages');
+  await go(page, 'succ', 500);
   ok('sem internet: abas e gráficos continuam funcionando', (await page.innerText('#succKpis')).includes('Monte-mor'));
-  await page.click('.tab[data-tab="apos"]'); await page.waitForTimeout(600);
+  await go(page, 'apos', 600);
   ok('sem internet: Monte Carlo e gráficos desenhados', await page.evaluate(() => !!document.getElementById('chartMc') && document.getElementById('chartMc').width > 0));
   await ctx.setOffline(false);
   // backup e lembrete
@@ -61,7 +62,7 @@ let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', 
   ok('backup baixado como arquivo comum e com o nome do cliente', dl.suggestedFilename() === 'asset-planning-backup.json' && j.client.name === 'Cliente Pages');
   ok('depois do backup: "Último backup: ... hoje"', (await page.innerText('.data-safety-slot')).includes('hoje'));
   // PDF sob CSP
-  await page.click('.tab[data-tab="diag"]'); await page.waitForTimeout(500);
+  await go(page, 'diag', 500);
   const [pd] = await Promise.all([page.waitForEvent('download', { timeout: 90000 }), page.click('#btnPdfDiag')]);
   const buf = fs.readFileSync(await pd.path());
   ok('PDF gerado sob a política de segurança (arquivo válido)', buf.slice(0, 5).toString() === '%PDF-' && buf.length > 50000, buf.length + ' bytes');

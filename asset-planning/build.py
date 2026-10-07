@@ -3,11 +3,13 @@
 
   dist/asset-planning.html        fragmento para artefato do claude.ai (Chart.js e html2pdf por CDN)
   dist/asset-planning.local.html  página completa e autônoma (tudo embutido), usada pelos testes de navegador
-  docs/                           site estático para o GitHub Pages: app instalável (PWA), sem dependências externas
+  ../docs/                        site estático para o GitHub Pages (pasta /docs na raiz do repositório): app instalável (PWA), sem dependências externas
 """
 import hashlib, json, os, shutil
 here = os.path.dirname(os.path.abspath(__file__))
-src, dist, docs = (os.path.join(here, d) for d in ('src', 'dist', 'docs'))
+root = os.path.dirname(here)  # raiz do repositório: o GitHub Pages só publica a raiz ou a pasta /docs dela
+src, dist = (os.path.join(here, d) for d in ('src', 'dist'))
+docs = os.path.join(root, 'docs')
 assets = os.path.join(src, 'assets')
 for d in (dist, docs): os.makedirs(d, exist_ok=True)
 def rd(p, base=src): return open(os.path.join(base, p), encoding='utf-8').read()
@@ -43,8 +45,8 @@ shutil.copytree(os.path.join(assets, 'licenses'), os.path.join(docs, 'assets', '
 
 fontface = ('@font-face{font-family:"Fraunces";src:url(fonts/fraunces-opsz.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}\n'
             '@font-face{font-family:"Public Sans";src:url(fonts/public-sans.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}\n')
-wr('docs/assets/app.css', fontface + css)
-wr('docs/assets/app.js', js + "\n")
+wr('assets/app.css', fontface + css, docs)
+wr('assets/app.js', js + "\n", docs)
 
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; "
        "connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'")
@@ -76,8 +78,8 @@ index = f'''<!doctype html>
 </body>
 </html>
 '''
-wr('docs/index.html', index)
-wr('docs/manifest.webmanifest', json.dumps({
+wr('index.html', index, docs)
+wr('manifest.webmanifest', json.dumps({
     "name": "Asset Planning", "short_name": "Asset Planning", "lang": "pt-BR",
     "description": "Planejamento financeiro e tributário: diagnóstico, objetivos, aposentadoria, proteção, sucessão e plano de ação.",
     "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#f2f4ee", "theme_color": "#8a5a1e",
@@ -85,10 +87,10 @@ wr('docs/manifest.webmanifest', json.dumps({
         {"src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
         {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
         {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}]
-}, ensure_ascii=False, indent=2) + "\n")
+}, ensure_ascii=False, indent=2) + "\n", docs)
 shell = ["./", "index.html", "manifest.webmanifest", "assets/app.css", "assets/app.js", "assets/chart.umd.min.js", "assets/html2pdf.bundle.min.js",
          "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png", "assets/fonts/fraunces-opsz.woff2", "assets/fonts/public-sans.woff2"]
-wr('docs/sw.js', rd('pwa/sw.template.js').replace('__BUILD_ID__', BUILD).replace('__SHELL__', json.dumps(shell)))
-wr('docs/.nojekyll', '')
-wr('docs/robots.txt', 'User-agent: *\nDisallow: /\n')
-print(f"build {BUILD} | artefato {len(artifact)//1024} KB | autônomo {len(local)//1024} KB | docs/assets/app.js {len(js)//1024} KB")
+wr('sw.js', rd('pwa/sw.template.js').replace('__BUILD_ID__', BUILD).replace('__SHELL__', json.dumps(shell)), docs)
+wr('.nojekyll', '', docs)
+wr('robots.txt', 'User-agent: *\nDisallow: /\n', docs)
+print(f"build {BUILD} | artefato {len(artifact)//1024} KB | autônomo {len(local)//1024} KB | ../docs/assets/app.js {len(js)//1024} KB")

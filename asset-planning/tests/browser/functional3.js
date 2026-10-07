@@ -1,4 +1,5 @@
 // Fase 3: Monte Carlo, sucessão, download autônomo (fora do claude.ai).
+const { go } = require('./nav.js');
 const { chromium } = require('playwright');
 const path = require('path');
 let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', n, x === undefined ? '' : x); } else console.log('ok  ', n, x === undefined ? '' : x); };
@@ -9,7 +10,7 @@ let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', 
   const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   let dialogs = 0; page.on('dialog', d => { dialogs++; d.dismiss(); });
   await page.goto('file://' + path.join(__dirname, '..', '..', 'dist', 'asset-planning.local.html')); await page.waitForTimeout(900);
-  const tab = async (t) => { await page.click('.tab[data-tab="' + t + '"]'); await page.waitForTimeout(450); };
+  const tab = async (t) => { await go(page, t, 450); };
   const txt = (sel) => page.$eval(sel, (e) => e.innerText);
   const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('asset-planning-v2')));
   const num = (s) => Number(String(s).replace(/[^\d]/g, ''));
@@ -20,7 +21,7 @@ let fails = 0; const ok = (n, c, x) => { if (!c) { fails++; console.log('FAIL', 
   ok('sem claude.ai o botão de backup aparece (download comum)', await page.isVisible('#btnExportFile'));
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('#btnExportFile')]);
   const body = require('fs').readFileSync(await dl.path(), 'utf8');
-  ok('download do backup: nome do arquivo e JSON válido com versões e blocos novos', dl.suggestedFilename() === 'asset-planning-backup.json' && (() => { const j = JSON.parse(body); return Array.isArray(j.versions) && j.mc && j.succ && j.meta.version === 5; })());
+  ok('download do backup: nome do arquivo e JSON válido com versões e blocos novos', dl.suggestedFilename() === 'asset-planning-backup.json' && (() => { const j = JSON.parse(body); return Array.isArray(j.versions) && j.mc && j.succ && j.meta.version === 6; })());
   ok('botões de PDF visíveis (html2pdf carregado)', await page.isVisible('#btnPdfApos'));
 
   // ---------- Monte Carlo ----------

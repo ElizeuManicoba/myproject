@@ -70,7 +70,8 @@ const Versions = (function (E, P, G, D, R, S) {
     ["goals", "Meta", [["amount", "valor", "money"], ["year", "ano", "int"], ["saved", "já reservado", "money"], ["priority", "prioridade", "text"]]],
     ["retIncome", "Renda na aposentadoria", [["value", "valor", "money"], ["ageFrom", "a partir da idade", "int"]]],
     ["phaseRows", "Fase de gasto", [["pct", "% do gasto", "pct"], ["health", "saúde extra", "money"]]],
-    ["taxRows", "Estrutura tributária", [["value", "valor", "money"], ["kind", "tipo", "text"], ["years", "anos", "int"]]]
+    ["taxRows", "Estrutura tributária", [["value", "valor", "money"], ["kind", "tipo", "text"], ["years", "anos", "int"]]],
+    ["commitments", "Compromisso", [["include", "incluído", "bool"], ["value", "valor", "money"], ["due", "prazo", "text"]], "text"]
   ];
   const get = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
   const same = (x, y) => (typeof x === "number" && typeof y === "number" ? Math.abs(x - y) < 1e-9 : x === y);
@@ -83,14 +84,14 @@ const Versions = (function (E, P, G, D, R, S) {
     });
     LISTS.forEach(function (L) {
       const la = get(sa, L[0]) || [], lb = get(sb, L[0]) || [];
-      const key = (r, i) => (r.label || ("#" + (i + 1))).trim().toLowerCase();
+      const kf = L[3] || "label", key = (r, i) => String(r[kf] || ("#" + (i + 1))).trim().toLowerCase().slice(0, 80);
       const ma = {}, mb = {};
       la.forEach((r, i) => { ma[key(r, i)] = r; }); lb.forEach((r, i) => { mb[key(r, i)] = r; });
       Object.keys(mb).forEach(function (k) {
-        if (!ma[k]) out.push({ group: L[1] + "s", label: L[1] + " adicionado(a): " + (mb[k].label || k), a: null, b: null, fmt: "text" });
-        else L[2].forEach(function (f) { if (!same(ma[k][f[0]], mb[k][f[0]])) out.push({ group: L[1] + "s", label: L[1] + " “" + (mb[k].label || k) + "”: " + f[1], a: ma[k][f[0]], b: mb[k][f[0]], fmt: f[2] }); });
+        if (!ma[k]) out.push({ group: L[1] + "s", label: L[1] + " adicionado(a): " + (mb[k][kf] || k), a: null, b: null, fmt: "text" });
+        else L[2].forEach(function (f) { if (!same(ma[k][f[0]], mb[k][f[0]])) out.push({ group: L[1] + "s", label: L[1] + " “" + (mb[k][kf] || k) + "”: " + f[1], a: ma[k][f[0]], b: mb[k][f[0]], fmt: f[2] }); });
       });
-      Object.keys(ma).forEach(function (k) { if (!mb[k]) out.push({ group: L[1] + "s", label: L[1] + " removido(a): " + (ma[k].label || k), a: null, b: null, fmt: "text" }); });
+      Object.keys(ma).forEach(function (k) { if (!mb[k]) out.push({ group: L[1] + "s", label: L[1] + " removido(a): " + (ma[k][kf] || k), a: null, b: null, fmt: "text" }); });
     });
     return out;
   }
